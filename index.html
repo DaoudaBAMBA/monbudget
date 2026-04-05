@@ -24,7 +24,7 @@
 html{height:100%;width:100%}
 body{min-height:100%;background:#070612;font-family:-apple-system,BlinkMacSystemFont,"SF Pro Display","Segoe UI",sans-serif;color:#F8F7FF;-webkit-font-smoothing:antialiased;-webkit-user-select:none;user-select:none}
 #root{height:100vh;display:flex;flex-direction:column;position:relative;-webkit-user-select:none;user-select:none}
-.scroll{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;-webkit-user-select:none;user-select:none}
+.scroll{flex:1;overflow-y:scroll;-webkit-overflow-scrolling:touch;-webkit-user-select:none;user-select:none;overscroll-behavior-y:contain;padding-bottom:max(80px, calc(80px + env(safe-area-inset-bottom)))}
 ::-webkit-scrollbar{display:none}
 .tap{cursor:pointer;user-select:none;-webkit-tap-highlight-color:transparent;-webkit-user-select:none}
 input,select,textarea{font-family:inherit;color:#F8F7FF;font-size:max(16px,1em)}
