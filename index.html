@@ -848,7 +848,7 @@ function StatsView({txns,cats,setCats,accounts,setAccounts,addMany,vnpHistory}){
         {sub==="charts" &&<ChartsView txns={txns} cats={cats} accounts={accounts} vnpHistory={vnpHistory}/>}
         {sub==="comptes"&&<ComptesView accounts={accounts} setAccounts={setAccounts}/>}
         {sub==="cats"   &&<CatsView cats={cats} setCats={setCats}/>}
-        {sub==="scan"   &&<ScanView addMany={addMany} accounts={accounts} cats={cats}/>}
+        {sub==="scan"   &&<ScanView addMany={addMany} accounts={accounts} cats={cats} txns={txns}/>}
       </div>
     </div>
   );
@@ -1124,48 +1124,71 @@ function CatsView({cats,setCats}){
 }
 
 // ── SCAN ────────────────────────────────────────────────────────────
-function ScanView({addMany,accounts,cats}){
+function ScanView({addMany,accounts,cats,txns=[]}){
+  const [apiKey,setApiKey]=useState(()=>localStorage.getItem("fin:apikey")||"");
+  const [showKeyInput,setShowKeyInput]=useState(!localStorage.getItem("fin:apikey"));
   const [stage,setStage]=useState("upload");const [preview,setPreview]=useState(null);const [parsed,setParsed]=useState([]);const [err,setErr]=useState("");
   const fileRef=useRef();
+  function saveKey(){if(!apiKey.trim())return;localStorage.setItem("fin:apikey",apiKey.trim());setShowKeyInput(false);}
   async function handleFile(e){
-    const file=e.target.files[0];if(!file)return;setStage("loading");setErr("");setPreview(URL.createObjectURL(file));
+    const file=e.target.files[0];if(!file)return;
+    const key=localStorage.getItem("fin:apikey");if(!key){setShowKeyInput(true);return;}
+    setStage("loading");setErr("");setPreview(URL.createObjectURL(file));
+    const isPDF=file.type==="application/pdf";
     const b64=await new Promise((res,rej)=>{const r=new FileReader();r.onload=()=>res(r.result.split(",")[1]);r.onerror=rej;r.readAsDataURL(file);});
+    const catIds=cats.map(c=>c.id).join(", ");
+    const contentBlock=isPDF?{type:"document",source:{type:"base64",media_type:"application/pdf",data:b64}}:{type:"image",source:{type:"base64",media_type:file.type||"image/jpeg",data:b64}};
     try{
-      const catIds=cats.map(c=>c.id).join(", ");
-      const resp=await fetch("https://api.anthropic.com/v1/messages",{method:"POST",headers:{"Content-Type":"application/json"},
-        body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:2000,messages:[{role:"user",content:[
-          {type:"image",source:{type:"base64",media_type:file.type||"image/jpeg",data:b64}},
-          {type:"text",text:`Analyse ce document financier. Réponds UNIQUEMENT avec un tableau JSON valide. Aucun texte avant ou après, aucune balise markdown.
+      const resp=await fetch("https://api.anthropic.com/v1/messages",{method:"POST",headers:{"Content-Type":"application/json","x-api-key":key,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},
+        body:JSON.stringify({model:"claude-opus-4-5",max_tokens:4000,messages:[{role:"user",content:[contentBlock,{type:"text",text:`Analyse ce document financier (${isPDF?"PDF":"image"}). Réponds UNIQUEMENT avec un tableau JSON valide. Aucun texte avant ou après, aucune balise markdown.
 Format: [{"date":"YYYY-MM-DD","description":"Marchand","amount":12.34,"type":"expense","category":"alim"}]
-type: expense=sortie, income=dépôt/salaire, epargne=transfert épargne. amount: positif. date: ${todayStr()} si invisible.
-Catégories disponibles: ${catIds}
-Règles: alim=épicerie/restaurant, habitation=loyer/hydro/assurance, transport=essence/auto/taxi/parking, sante=pharmacie/médecin/dentiste, telecom=cellulaire/internet, loisirs=sorties/streaming/voyage/bar, financiers=remboursement carte/frais/intérêts, salaire=salaire emploi permanent, livraison=revenu livraison, revenus=autres revenus, formation=école/livres, enfants, animaux, epargne=transfert épargne, retraite=REER/CELI.
-Inclure TOUTES les transactions visibles. Si une catégorie ne correspond pas exactement, choisis la plus proche dans la liste.`}
-        ]}]})});
+type: expense=sortie/débit, income=dépôt/salaire, epargne=transfert. amount: positif toujours. date: ${todayStr()} si invisible.
+Catégories: ${catIds}
+Règles: alim=épicerie/resto/café, habitation=loyer/hydro/assurance/condo, transport=essence/taxi/STM/parking/Uber, sante=pharmacie/médecin/dentiste, telecom=cellulaire/internet, loisirs=sorties/streaming/voyage/bar, financiers=frais/intérêts, salaire=salaire permanent, livraison=DoorDash/Uber, revenus=autres, formation=école/livres, enfants=garderie/jouets, animaux=vétérinaire, epargne=transfert/invest, retraite=REER/CELI.
+Inclure TOUTES les transactions.`}]}]})});
+      if(!resp.ok){const e=await resp.json().catch(()=>({}));throw new Error(e.error?.message||"HTTP "+resp.status);}
       const data=await resp.json();const text=data.content?.find(b=>b.type==="text")?.text||"";
       const clean=text.replace(/```json?/g,"").replace(/```/g,"").trim();
-      setParsed(JSON.parse(clean).map((t,i)=>({...t,id:`s-${Date.now()}-${i}`,amount:Math.abs(parseFloat(t.amount)||0),selected:true,accountId:accounts[0]?.id||null})));
-      setStage("review");
-    }catch(e){setErr("Impossible d'analyser. Essaie une image plus nette.");setStage("upload");}
+      const rawTxns=JSON.parse(clean);
+      const withFlags=rawTxns.map((t,i)=>{
+        const amt=Math.abs(parseFloat(t.amount)||0);
+        const isDup=txns.some(ex=>ex.date===t.date&&Math.abs((+ex.amount||0)-amt)<0.02&&ex.type===t.type);
+        return{...t,id:`s-${Date.now()}-${i}`,amount:amt,selected:!isDup,accountId:accounts[0]?.id||null,isDuplicate:isDup};
+      });
+      setParsed(withFlags);setStage("review");
+    }catch(e){console.error(e);setErr("Erreur: "+(e.message||"Vérifie ta clé API"));setStage("upload");}
   }
   const toggle=id=>setParsed(p=>p.map(t=>t.id===id?{...t,selected:!t.selected}:t));
   const updateCat=(id,c)=>setParsed(p=>p.map(t=>t.id===id?{...t,category:c}:t));
   const sel=parsed.filter(t=>t.selected);
+  if(showKeyInput)return(
+    <div className="scroll" style={{padding:"14px"}}>
+      <Card style={{padding:"20px"}}>
+        <p style={{fontSize:15,fontWeight:700,color:C.text,margin:"0 0 12px"}}>Clé API Anthropic requise</p>
+        <p style={{fontSize:13,color:C.sec,margin:"0 0 14px",lineHeight:1.6}}>Obtiens une clé gratuite sur <span style={{color:C.accent,fontWeight:600}}>console.anthropic.com</span>. Elle sera stockée localement sur ton appareil.</p>
+        <input value={apiKey} onChange={e=>setApiKey(e.target.value)} placeholder="sk-ant-..." style={{width:"100%",fontSize:14,border:`1px solid ${C.border2}`,background:C.card2,borderRadius:10,padding:"10px 12px",color:C.text,marginBottom:12}}/>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+          <div className="tap" onClick={()=>{setShowKeyInput(false);setApiKey("");}} style={{textAlign:"center",padding:"11px",borderRadius:12,background:C.card2,fontSize:13,fontWeight:600,color:C.sec}}>Ignorer</div>
+          <div className="tap" onClick={saveKey} style={{textAlign:"center",padding:"11px",borderRadius:12,background:C.accent,fontSize:13,fontWeight:700,color:"#fff"}}>Enregistrer</div>
+        </div>
+      </Card>
+    </div>
+  );
   return(
     <div className="scroll">
       <div style={{padding:"12px 14px",display:"flex",flexDirection:"column",gap:11}}>
         {stage==="upload"&&<>
-          <input ref={fileRef} type="file" accept="image/*" onChange={handleFile} style={{display:"none"}}/>
+          <input ref={fileRef} type="file" accept="image/*,.pdf,application/pdf" onChange={handleFile} style={{display:"none"}}/>
           <div className="tap" onClick={()=>fileRef.current.click()} style={{background:C.card,border:`2px dashed ${C.accent}44`,borderRadius:20,padding:"3rem 1.5rem",textAlign:"center",display:"flex",flexDirection:"column",alignItems:"center",gap:14}}>
             <div style={{width:64,height:64,borderRadius:18,background:C.accentL,display:"flex",alignItems:"center",justifyContent:"center"}}>
               <svg width="28" height="28" viewBox="0 0 28 28" fill="none"><rect x="3" y="6" width="22" height="16" rx="2.5" stroke={C.accent} strokeWidth="1.8"/><circle cx="10" cy="12" r="2.5" fill={C.accent} fillOpacity=".4"/><path d="M3 19l6-5 5 4 4-3 7 6" stroke={C.accent} strokeWidth="1.5" strokeOpacity=".6" strokeLinejoin="round"/></svg>
             </div>
-            <div><p style={{fontSize:16,fontWeight:700,margin:"0 0 5px",color:C.text}}>Choisir une image</p><p style={{fontSize:13,color:C.muted,margin:0}}>Reçu ou capture d'écran de ta banque</p></div>
+            <div><p style={{fontSize:16,fontWeight:700,margin:"0 0 5px",color:C.text}}>Choisir un fichier</p><p style={{fontSize:13,color:C.muted,margin:0}}>Image, PDF, reçu ou relève bancaire</p></div>
           </div>
           {err&&<p style={{fontSize:13,color:C.red,textAlign:"center"}}>{err}</p>}
           <Card style={{padding:"14px 16px",background:C.accentL,border:`1px solid ${C.accent}30`}}>
-            <p style={{fontSize:12,fontWeight:700,color:C.accent,margin:"0 0 4px"}}>Comment ça marche</p>
-            <p style={{fontSize:12,color:C.sec,margin:0,lineHeight:1.7}}>L'IA lit ton image, identifie chaque transaction et l'assigne à une catégorie automatiquement selon TES catégories personnalisées. Tu révises avant d'enregistrer.</p>
+            <p style={{fontSize:12,fontWeight:700,color:C.accent,margin:"0 0 6px"}}>📄 Supporte</p>
+            <p style={{fontSize:12,color:C.sec,margin:0,lineHeight:1.6}}>Images (JPG, PNG) • PDF (relevés bancaires) • Reçus • Captures d'écran</p>
           </Card>
         </>}
         {stage==="loading"&&<Card style={{padding:"3rem",textAlign:"center"}}>
@@ -1179,7 +1202,8 @@ Inclure TOUTES les transactions visibles. Si une catégorie ne correspond pas ex
             <span className="tap" onClick={()=>{setStage("upload");setPreview(null);}} style={{fontSize:12,color:C.accent}}>Recommencer</span>
           </div>
           {parsed.map(t=>{const cat=cats.find(c=>c.id===t.category)||cats[3];return(
-            <Card key={t.id} style={{padding:"13px 16px",opacity:t.selected?1:.4}}>
+            <Card key={t.id} style={{padding:"13px 16px",opacity:t.selected?1:.4,border:t.isDuplicate?`1px solid ${C.orange}33`:`1px solid ${C.border}`}}>
+              {t.isDuplicate&&<p style={{fontSize:11,color:C.orange,margin:"0 0 8px",fontWeight:600}}>⚠️ Possible doublon détecté</p>}
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:10}}>
                 <div style={{display:"flex",alignItems:"center",gap:10,flex:1,minWidth:0}}>
                   <div className="tap" onClick={()=>toggle(t.id)} style={{width:24,height:24,borderRadius:7,flexShrink:0,background:t.selected?C.accent:"transparent",border:`2px solid ${t.selected?C.accent:C.border2}`,display:"flex",alignItems:"center",justifyContent:"center"}}>
@@ -1191,8 +1215,7 @@ Inclure TOUTES les transactions visibles. Si une catégorie ne correspond pas ex
               </div>
               <div style={{display:"flex",flexWrap:"wrap",gap:5}}>
                 {cats.filter(c=>!c.forTypes||c.forTypes.includes(t.type)).map(c=>(
-                  <div key={c.id} className="chip tap" onClick={()=>updateCat(t.id,c.id)}
-                    style={{background:t.category===c.id?c.color+"28":"rgba(255,255,255,.05)",color:t.category===c.id?c.color:C.muted,borderColor:t.category===c.id?c.color:C.border,fontWeight:t.category===c.id?700:400,fontSize:11}}>
+                  <div key={c.id} className="chip tap" onClick={()=>updateCat(t.id,c.id)} style={{background:t.category===c.id?c.color+"28":"rgba(255,255,255,.05)",color:t.category===c.id?c.color:C.muted,borderColor:t.category===c.id?c.color:C.border,fontWeight:t.category===c.id?700:400,fontSize:11}}>
                     {c.icon} {c.label}
                   </div>
                 ))}
