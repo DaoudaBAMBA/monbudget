@@ -1140,7 +1140,7 @@ function ScanView({addMany,accounts,cats,txns=[]}){
     const contentBlock=isPDF?{type:"document",source:{type:"base64",media_type:"application/pdf",data:b64}}:{type:"image",source:{type:"base64",media_type:file.type||"image/jpeg",data:b64}};
     try{
       const resp=await fetch("https://api.anthropic.com/v1/messages",{method:"POST",headers:{"Content-Type":"application/json","x-api-key":key,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},
-        body:JSON.stringify({model:"claude-opus-4-5",max_tokens:4000,messages:[{role:"user",content:[contentBlock,{type:"text",text:`Analyse ce document financier (${isPDF?"PDF":"image"}). Réponds UNIQUEMENT avec un tableau JSON valide. Aucun texte avant ou après, aucune balise markdown.
+        body:JSON.stringify({model:"claude-sonnet-4-6",max_tokens:4000,messages:[{role:"user",content:[contentBlock,{type:"text",text:`Analyse ce document financier (${isPDF?"PDF":"image"}). Réponds UNIQUEMENT avec un tableau JSON valide. Aucun texte avant ou après, aucune balise markdown.
 Format: [{"date":"YYYY-MM-DD","description":"Marchand","amount":12.34,"type":"expense","category":"alim"}]
 type: expense=sortie/débit, income=dépôt/salaire, epargne=transfert. amount: positif toujours. date: ${todayStr()} si invisible.
 Catégories: ${catIds}
