@@ -2,7 +2,18 @@
 <html lang="fr">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover, shrink-to-fit=no">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="MonBudget">
+<meta name="theme-color" content="#0A0918">
+<meta name="description" content="Gestion de budget personnel et finances - MonBudget">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="format-detection" content="telephone=no">
+<link rel="icon" type="image/x-icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 180 180'><rect fill='%23070612' width='180' height='180'/><text x='50%' y='50%' font-size='80' fill='%237C3AED' text-anchor='middle' dominant-baseline='middle' font-weight='bold'>$</text></svg>">
+<link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 180 180'><rect fill='%23070612' width='180' height='180' rx='40'/><text x='50%' y='50%' font-size='80' fill='%237C3AED' text-anchor='middle' dominant-baseline='middle' font-weight='bold'>$</text></svg>">
+<link rel="manifest" href="manifest.json">
 <title>MonBudget</title>
 <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
 <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
@@ -10,13 +21,13 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
-html{height:100%}
-body{min-height:100%;background:#070612;font-family:-apple-system,BlinkMacSystemFont,"SF Pro Display","Segoe UI",sans-serif;color:#F8F7FF;-webkit-font-smoothing:antialiased}
-#root{height:100vh;display:flex;flex-direction:column}
-.scroll{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch}
+html{height:100%;width:100%}
+body{min-height:100%;background:#070612;font-family:-apple-system,BlinkMacSystemFont,"SF Pro Display","Segoe UI",sans-serif;color:#F8F7FF;-webkit-font-smoothing:antialiased;-webkit-user-select:none;user-select:none}
+#root{height:100vh;display:flex;flex-direction:column;position:relative;-webkit-user-select:none;user-select:none}
+.scroll{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;-webkit-user-select:none;user-select:none}
 ::-webkit-scrollbar{display:none}
-.tap{cursor:pointer;user-select:none;-webkit-tap-highlight-color:transparent}
-input,select,textarea{font-family:inherit;color:#F8F7FF}
+.tap{cursor:pointer;user-select:none;-webkit-tap-highlight-color:transparent;-webkit-user-select:none}
+input,select,textarea{font-family:inherit;color:#F8F7FF;font-size:max(16px,1em)}
 input:focus,select:focus{outline:none}
 input[type=date]::-webkit-calendar-picker-indicator{filter:invert(1);opacity:.4;cursor:pointer}
 input[type=number]{-moz-appearance:textfield}
@@ -27,6 +38,12 @@ input[type=number]::-webkit-inner-spin-button{display:none}
 @keyframes fadeIn{from{opacity:0}to{opacity:1}}
 .sheet{animation:slideUp .25s ease}
 .overlay{animation:fadeIn .2s ease}
+/* BOTTOM NAV FIXE */
+.nav-spacer{height:80px}
+@supports(padding:max(0px)){
+  .nav-spacer{padding-bottom:max(12px,env(safe-area-inset-bottom))}
+}
+
 @media(min-width:768px){
   body{display:flex;align-items:center;justify-content:center}
   #root{width:420px;height:min(92vh,900px);border-radius:40px;overflow:hidden;box-shadow:0 40px 100px rgba(0,0,0,.9),0 0 0 1px rgba(255,255,255,.07);position:relative}
@@ -1208,7 +1225,7 @@ function BottomNav({tab,setTab}){
   const left=[{id:"home",l:"Accueil",n:"home"},{id:"activity",l:"Activité",n:"act"}];
   const right=[{id:"budget",l:"Budget",n:"bgt"},{id:"stats",l:"Stats",n:"sts"}];
   return(
-    <div style={{background:C.surf,borderTop:`1px solid ${C.border2}`,display:"flex",alignItems:"center",padding:"8px 4px 14px",flexShrink:0}}>
+    <div style={{position:"fixed",bottom:0,left:0,right:0,background:C.surf,borderTop:`1px solid ${C.border2}`,display:"flex",alignItems:"center",padding:"max(8px, calc(8px + env(safe-area-inset-bottom)/2)) 4px max(14px, calc(14px + env(safe-area-inset-bottom)))",flexShrink:0,zIndex:1000}}>
       {left.map(t=>(
         <div key={t.id} className="tap" onClick={()=>setTab(t.id)} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:4,padding:"4px 0"}}>
           <NavIco n={t.n} active={tab===t.id}/>
@@ -1254,6 +1271,27 @@ function App(){
       }catch(e){}
       setReady(true);
     })();
+  },[]);
+
+  // Sync auto quand la fenêtre redevient visible (favori mobile / onglet)
+  useEffect(()=>{
+    const handleVisibility=()=>{
+      if(document.hidden)return;
+      setTimeout(async()=>{
+        try{
+          const[t,a,ca,b,v]=await Promise.allSettled([
+            STORE.get("fin:t7"),STORE.get("fin:a7"),STORE.get("fin:c7"),STORE.get("fin:b7"),STORE.get("fin:v7")
+          ]);
+          if(t.status==="fulfilled"&&t.value)setTxns(JSON.parse(t.value));
+          if(a.status==="fulfilled"&&a.value)setAccounts(JSON.parse(a.value));
+          if(ca.status==="fulfilled"&&ca.value)setCats(JSON.parse(ca.value));
+          if(b.status==="fulfilled"&&b.value)setBudgets(JSON.parse(b.value));
+          if(v.status==="fulfilled"&&v.value)setVnpHistory(JSON.parse(v.value));
+        }catch(e){}
+      },150);
+    };
+    document.addEventListener("visibilitychange",handleVisibility);
+    return()=>document.removeEventListener("visibilitychange",handleVisibility);
   },[]);
 
   useEffect(()=>{if(ready)STORE.set("fin:t7",JSON.stringify(txns));}, [txns,ready]);
@@ -1313,17 +1351,26 @@ function App(){
 
   return(
     <div style={{height:"100%",display:"flex",flexDirection:"column",background:C.bg}}>
-      {tab==="home"     &&<Home txns={txns} cats={cats} accounts={accounts} budgets={budgets} vnpHistory={vnpHistory} setTab={setTab}/>}
-      {tab==="activity" &&<Activity txns={txns} cats={cats} accounts={accounts} deleteTxn={deleteTxn}/>}
-      {tab==="add"      &&<AddTxn addMany={addMany} accounts={accounts} cats={cats} onDone={()=>setTab("home")}/>}
-      {tab==="budget"   &&<BudgetView txns={txns} cats={cats} budgets={budgets} setBudgets={setBudgets}/>}
-      {tab==="stats"    &&<StatsView txns={txns} cats={cats} setCats={setCats} accounts={accounts} setAccounts={setAccounts} addMany={addMany} vnpHistory={vnpHistory}/>}
+      <div style={{flex:1,display:"flex",flexDirection:"column",overflow:"hidden"}}>
+        {tab==="home"     &&<Home txns={txns} cats={cats} accounts={accounts} budgets={budgets} vnpHistory={vnpHistory} setTab={setTab}/>}
+        {tab==="activity" &&<Activity txns={txns} cats={cats} accounts={accounts} deleteTxn={deleteTxn}/>}
+        {tab==="add"      &&<AddTxn addMany={addMany} accounts={accounts} cats={cats} onDone={()=>setTab("home")}/>}
+        {tab==="budget"   &&<BudgetView txns={txns} cats={cats} budgets={budgets} setBudgets={setBudgets}/>}
+        {tab==="stats"    &&<StatsView txns={txns} cats={cats} setCats={setCats} accounts={accounts} setAccounts={setAccounts} addMany={addMany} vnpHistory={vnpHistory}/>}
+      </div>
       <BottomNav tab={tab} setTab={setTab}/>
     </div>
   );
 }
 
 ReactDOM.createRoot(document.getElementById("root")).render(<App/>);
+
+// Enregistrer le Service Worker pour PWA
+if('serviceWorker' in navigator){
+  window.addEventListener('load',()=>{
+    navigator.serviceWorker.register('sw.js').catch(e=>console.log('SW registration failed:',e));
+  });
+}
 </script>
 </body>
 </html>

@@ -1,0 +1,49 @@
+{
+  "name": "MonBudget - Gestion de Budget",
+  "short_name": "MonBudget",
+  "description": "Application de gestion de budget personnel et finances",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "theme_color": "#0A0918",
+  "background_color": "#0A0918",
+  "icons": [
+    {
+      "src": "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 192 192'><rect fill='%23070612' width='192' height='192' rx='45'/><text x='50%' y='50%' font-size='100' fill='%237C3AED' text-anchor='middle' dominant-baseline='middle' font-weight='bold' font-family='system-ui'>$</text></svg>",
+      "sizes": "192x192",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'><rect fill='%23070612' width='512' height='512' rx='120'/><text x='50%' y='50%' font-size='280' fill='%237C3AED' text-anchor='middle' dominant-baseline='middle' font-weight='bold' font-family='system-ui'>$</text></svg>",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["finance", "productivity"],
+  "screenshots": [
+    {
+      "src": "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 540 720'><rect fill='%23070612' width='540' height='720'/><text x='50%' y='50%' font-size='120' fill='%237C3AED' text-anchor='middle' dominant-baseline='middle' font-weight='bold'>MonBudget</text></svg>",
+      "sizes": "540x720",
+      "type": "image/svg+xml"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Ajouter une transaction",
+      "short_name": "Ajouter",
+      "description": "Ajouter rapidement une dépense ou revenu",
+      "url": "/?tab=add",
+      "icons": []
+    },
+    {
+      "name": "Voir mes comptes",
+      "short_name": "Comptes",
+      "description": "Consulter tous vos comptes",
+      "url": "/?tab=stats",
+      "icons": []
+    }
+  ]
+}
