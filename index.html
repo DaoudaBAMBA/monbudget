@@ -24,12 +24,7 @@
 html{height:100%;width:100%}
 body{min-height:100%;background:#070612;font-family:-apple-system,BlinkMacSystemFont,"SF Pro Display","Segoe UI",sans-serif;color:#F8F7FF;-webkit-font-smoothing:antialiased;-webkit-user-select:none;user-select:none}
 #root{height:100vh;display:flex;flex-direction:column;position:relative;-webkit-user-select:none;user-select:none}
-.app-header{position:fixed;top:0;left:0;right:0;height:56px;background:linear-gradient(135deg,#0A0918 0%,#13112A 100%);border-bottom:1px solid rgba(255,255,255,.07);display:flex;align-items:center;padding:max(0,calc(env(safe-area-inset-top) - 0px)) 18px 0;z-index:999;backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px)}
-.app-header-logo{display:flex;align-items:center;gap:10px;flex:1}
-.app-header-logo-icon{width:32px;height:32px;border-radius:8px;background:rgba(124,58,237,.2);display:flex;align-items:center;justify-content:center;font-weight:800;color:#7C3AED;font-size:16px}
-.app-header-logo-text{font-size:16px;font-weight:700;color:#F8F7FF;letter-spacing:"-0.5px"}
-.app-header-logo-sub{font-size:11px;color:rgba(248,247,255,.5);font-weight:500}
-.scroll{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;-webkit-user-select:none;user-select:none;margin-top:56px}
+.scroll{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;-webkit-user-select:none;user-select:none}
 ::-webkit-scrollbar{display:none}
 .tap{cursor:pointer;user-select:none;-webkit-tap-highlight-color:transparent;-webkit-user-select:none}
 input,select,textarea{font-family:inherit;color:#F8F7FF;font-size:max(16px,1em)}
@@ -1252,21 +1247,6 @@ function BottomNav({tab,setTab}){
   );
 }
 
-// ── APP HEADER ──────────────────────────────────────────────────────────
-function AppHeader(){
-  return(
-    <div className="app-header">
-      <div className="app-header-logo">
-        <div className="app-header-logo-icon">$</div>
-        <div>
-          <div className="app-header-logo-text">MonBudget</div>
-          <div className="app-header-logo-sub">Daouda</div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 // ── APP ────────────────────────────────────────────────────────────────
 function App(){
   const [tab,setTab]=useState("home");
@@ -1371,7 +1351,6 @@ function App(){
 
   return(
     <div style={{height:"100%",display:"flex",flexDirection:"column",background:C.bg}}>
-      <AppHeader/>
       <div style={{flex:1,display:"flex",flexDirection:"column",overflow:"hidden"}}>
         {tab==="home"     &&<Home txns={txns} cats={cats} accounts={accounts} budgets={budgets} vnpHistory={vnpHistory} setTab={setTab}/>}
         {tab==="activity" &&<Activity txns={txns} cats={cats} accounts={accounts} deleteTxn={deleteTxn}/>}
