@@ -45,8 +45,15 @@ input[type=number]::-webkit-inner-spin-button{display:none}
 }
 
 @media(min-width:768px){
-  body{display:flex;align-items:center;justify-content:center}
-  #root{width:420px;height:min(92vh,900px);border-radius:40px;overflow:hidden;box-shadow:0 40px 100px rgba(0,0,0,.9),0 0 0 1px rgba(255,255,255,.07);position:relative}
+  body{display:flex;align-items:center;justify-content:center;background:#050410}
+  #root{width:460px;height:min(93vh,920px);border-radius:44px;overflow:hidden;box-shadow:0 40px 120px rgba(0,0,0,.95),0 0 0 1px rgba(255,255,255,.08);position:relative}
+}
+@media(min-width:1100px){
+  body{align-items:stretch;padding:20px;gap:0;justify-content:center}
+  #root{width:min(96vw,1160px);height:calc(100vh - 40px);border-radius:24px;display:grid;grid-template-columns:220px 1fr;grid-template-rows:1fr;overflow:hidden}
+  .scroll{padding-bottom:24px!important}
+  .bnav{display:none!important}
+  .snav{display:flex!important}
 }
 </style>
 </head>
@@ -136,12 +143,19 @@ const STORE={
 };
 
 // ── BANK LOGO ───────────────────────────────────────────────────────
+const BANK_DOMAINS={scotiabank:"scotiabank.com",desjardins:"desjardins.com",td:"td.com",bmo:"bmo.com",rbc:"rbcroyalbank.com",cibc:"cibc.com",nationale:"bnc.ca",wealthsimple:"wealthsimple.com",ia:"ia.ca",simplii:"simpliifinancial.com",tangerine:"tangerine.ca",hsbc:"hsbc.ca"};
 function BankLogo({bankId,name,size=40}){
   const b=bankById(bankId);
+  const [err,setErr]=useState(false);
   const label=b.id==="other"&&name?name.slice(0,2).toUpperCase():b.init;
+  const domain=BANK_DOMAINS[bankId];
+  const imgSrc=domain&&!err?`https://logo.clearbit.com/${domain}`:null;
   return(
-    <div style={{width:size,height:size,borderRadius:size*0.28,background:b.col+"22",border:`1px solid ${b.col}33`,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
-      <span style={{fontSize:size*0.3,fontWeight:800,color:b.col,letterSpacing:"-0.5px",lineHeight:1}}>{label}</span>
+    <div style={{width:size,height:size,borderRadius:size*0.28,background:b.col+"22",border:`1px solid ${b.col}33`,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,overflow:"hidden"}}>
+      {imgSrc
+        ?<img src={imgSrc} alt={b.label} onError={()=>setErr(true)} style={{width:size*0.65,height:size*0.65,objectFit:"contain",borderRadius:4}}/>
+        :<span style={{fontSize:size*0.3,fontWeight:800,color:b.col,letterSpacing:"-0.5px",lineHeight:1}}>{label}</span>
+      }
     </div>
   );
 }
@@ -376,43 +390,114 @@ function TxnRow({txn,cats,accounts,last,onTap}){
 }
 
 // ── TXN DETAIL SHEET ──────────────────────────────────────────────────
-function TxnSheet({txn,cats,accounts,onClose,onDelete}){
-  const cat=cats.find(c=>c.id===txn.category)||cats[3];
+function TxnSheet({txn,cats,accounts,onClose,onDelete,onEdit}){
   const isInc=txn.type==="income";const isSav=txn.type==="epargne";
+  const tCol=isInc?C.green:isSav?C.accent:C.red;
+  const [mode,setMode]=useState("view"); // "view" | "edit" | "confirm"
+  const [desc,setDesc]=useState(txn.description||"");
+  const [amount,setAmount]=useState(String(txn.amount||""));
+  const [cat,setCat]=useState(txn.category||"alim");
+  const [date,setDate]=useState(txn.date||todayStr());
+  const [accountId,setAccountId]=useState(txn.accountId||"");
+  const currentCat=cats.find(c=>c.id===cat)||cats[3];
   const fromAcct=accounts.find(a=>a.id===txn.accountId);
   const toAcct=accounts.find(a=>a.id===txn.accountToId);
-  const [confirm,setConfirm]=useState(false);
+  const validCats=cats.filter(c=>!c.forTypes||c.forTypes.includes(txn.type));
+  function save(){
+    const n=parseFloat(amount.replace(",","."));if(!n||isNaN(n))return;
+    onEdit({...txn,description:desc,amount:n,category:cat,date,accountId:accountId||txn.accountId});
+    onClose();
+  }
   return(
-    <div style={{position:"fixed",inset:0,zIndex:200,display:"flex",flexDirection:"column",justifyContent:"flex-end"}} onClick={onClose}>
-      <div className="overlay" style={{position:"absolute",inset:0,background:"rgba(0,0,0,.6)",backdropFilter:"blur(4px)"}}/>
-      <div className="sheet" onClick={e=>e.stopPropagation()} style={{background:C.surf,borderRadius:"24px 24px 0 0",padding:"20px 20px 36px",position:"relative",border:`1px solid ${C.border2}`}}>
-        <div style={{width:36,height:4,borderRadius:2,background:C.border2,margin:"0 auto 20px"}}/>
-        <div style={{display:"flex",alignItems:"center",gap:14,marginBottom:20}}>
-          <CatIconBadge cat={cat} size={52}/>
-          <div style={{flex:1}}>
-            <p style={{fontSize:17,fontWeight:700,margin:"0 0 3px",color:C.text}}>{txn.description||cat.label}</p>
-            <p style={{fontSize:13,color:C.muted,margin:0}}>{cat.label} · {txn.date}</p>
+    <div style={{position:"fixed",inset:0,zIndex:200,display:"flex",flexDirection:"column",justifyContent:"flex-end"}} onClick={mode==="edit"?undefined:onClose}>
+      <div className="overlay" style={{position:"absolute",inset:0,background:"rgba(0,0,0,.6)",backdropFilter:"blur(4px)"}} onClick={mode==="edit"?onClose:undefined}/>
+      <div className="sheet" onClick={e=>e.stopPropagation()} style={{background:C.surf,borderRadius:"24px 24px 0 0",padding:"20px 20px 36px",position:"relative",border:`1px solid ${C.border2}`,maxHeight:"90vh",overflowY:"auto"}}>
+        <div style={{width:36,height:4,borderRadius:2,background:C.border2,margin:"0 auto 18px"}}/>
+
+        {mode==="view"&&<>
+          <div style={{display:"flex",alignItems:"center",gap:14,marginBottom:18}}>
+            <CatIconBadge cat={currentCat} size={52}/>
+            <div style={{flex:1}}>
+              <p style={{fontSize:17,fontWeight:700,margin:"0 0 3px",color:C.text}}>{txn.description||currentCat.label}</p>
+              <p style={{fontSize:13,color:C.muted,margin:0}}>{currentCat.label} · {txn.date}</p>
+            </div>
+            <p style={{fontSize:22,fontWeight:800,color:isInc?C.green:isSav?C.accent:C.text,flexShrink:0}}>{isInc?"+":"-"}{fmt(txn.amount)}</p>
           </div>
-          <p style={{fontSize:22,fontWeight:800,color:isInc?C.green:isSav?C.accent:C.text,flexShrink:0}}>{isInc?"+":"-"}{fmt(txn.amount)}</p>
-        </div>
-        {(fromAcct||toAcct)&&(
-          <div style={{background:C.card2,borderRadius:14,padding:"12px 14px",marginBottom:14}}>
-            {fromAcct&&<p style={{fontSize:12,color:C.sec,margin:"0 0 2px"}}>{isSav?"De : ":"Compte : "}<span style={{color:C.text,fontWeight:600}}>{fromAcct.name}</span></p>}
-            {isSav&&toAcct&&<p style={{fontSize:12,color:C.sec,margin:0}}>Vers : <span style={{color:C.text,fontWeight:600}}>{toAcct.name}</span></p>}
-          </div>
-        )}
-        {confirm
-          ?<div>
-            <p style={{fontSize:14,color:C.red,textAlign:"center",marginBottom:14,fontWeight:500}}>Supprimer cette transaction ? Cette action est irréversible et le solde du compte sera ajusté.</p>
-            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
-              <div className="tap" onClick={()=>setConfirm(false)} style={{textAlign:"center",padding:"13px",borderRadius:14,background:C.card2,fontSize:14,fontWeight:600,color:C.sec}}>Annuler</div>
-              <div className="tap" onClick={onDelete} style={{textAlign:"center",padding:"13px",borderRadius:14,background:C.red,fontSize:14,fontWeight:700,color:"#fff"}}>Supprimer</div>
+          {(fromAcct||toAcct)&&(
+            <div style={{background:C.card2,borderRadius:14,padding:"12px 14px",marginBottom:14}}>
+              {fromAcct&&<p style={{fontSize:12,color:C.sec,margin:"0 0 2px"}}>{isSav?"De : ":"Compte : "}<span style={{color:C.text,fontWeight:600}}>{fromAcct.name}</span></p>}
+              {isSav&&toAcct&&<p style={{fontSize:12,color:C.sec,margin:0}}>Vers : <span style={{color:C.text,fontWeight:600}}>{toAcct.name}</span></p>}
+            </div>
+          )}
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginTop:4}}>
+            <div className="tap" onClick={()=>setMode("edit")} style={{textAlign:"center",padding:"13px",borderRadius:14,background:C.accentL,fontSize:14,fontWeight:700,color:C.accent,border:`1px solid ${C.accent}33`}}>
+              ✏️ Modifier
+            </div>
+            <div className="tap" onClick={()=>setMode("confirm")} style={{textAlign:"center",padding:"13px",borderRadius:14,background:C.redL,fontSize:14,fontWeight:700,color:C.red,border:`1px solid ${C.red}33`}}>
+              🗑 Supprimer
             </div>
           </div>
-          :<div className="tap" onClick={()=>setConfirm(true)} style={{textAlign:"center",padding:"14px",borderRadius:14,background:C.redL,fontSize:15,fontWeight:600,color:C.red,border:`1px solid ${C.red}33`}}>
-            Supprimer la transaction
+        </>}
+
+        {mode==="edit"&&<>
+          <p style={{fontSize:16,fontWeight:700,color:C.text,margin:"0 0 16px"}}>Modifier la transaction</p>
+          {/* Montant */}
+          <div style={{background:C.card2,borderRadius:14,padding:"12px 14px",marginBottom:10}}>
+            <p style={{fontSize:10,color:C.muted,margin:"0 0 6px",textTransform:"uppercase",letterSpacing:".07em"}}>Montant</p>
+            <input type="number" value={amount} onChange={e=>setAmount(e.target.value)}
+              style={{width:"100%",fontSize:28,fontWeight:800,border:"none",background:"transparent",padding:0,color:tCol,letterSpacing:"-0.5px"}}/>
           </div>
-        }
+          {/* Description */}
+          <div style={{background:C.card2,borderRadius:14,padding:"12px 14px",marginBottom:10}}>
+            <p style={{fontSize:10,color:C.muted,margin:"0 0 6px",textTransform:"uppercase",letterSpacing:".07em"}}>Description</p>
+            <input value={desc} onChange={e=>setDesc(e.target.value)} placeholder="Description..."
+              style={{width:"100%",fontSize:15,border:"none",background:"transparent",padding:0,color:C.text}}/>
+          </div>
+          {/* Date */}
+          <div style={{background:C.card2,borderRadius:14,padding:"12px 14px",marginBottom:10}}>
+            <p style={{fontSize:10,color:C.muted,margin:"0 0 6px",textTransform:"uppercase",letterSpacing:".07em"}}>Date</p>
+            <input type="date" value={date} onChange={e=>setDate(e.target.value)}
+              style={{width:"100%",fontSize:15,border:"none",background:"transparent",color:C.text,padding:0}}/>
+          </div>
+          {/* Catégorie */}
+          <div style={{background:C.card2,borderRadius:14,padding:"12px 14px",marginBottom:10}}>
+            <p style={{fontSize:10,color:C.muted,margin:"0 0 8px",textTransform:"uppercase",letterSpacing:".07em"}}>Catégorie</p>
+            <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
+              {validCats.map(c=>(
+                <div key={c.id} className="chip tap" onClick={()=>setCat(c.id)}
+                  style={{background:cat===c.id?c.color+"28":"rgba(255,255,255,.05)",color:cat===c.id?c.color:C.sec,borderColor:cat===c.id?c.color:C.border,fontWeight:cat===c.id?700:400}}>
+                  {c.icon} {c.label}
+                </div>
+              ))}
+            </div>
+          </div>
+          {/* Compte */}
+          {accounts.length>0&&!isSav&&(
+            <div style={{background:C.card2,borderRadius:14,padding:"12px 14px",marginBottom:10}}>
+              <p style={{fontSize:10,color:C.muted,margin:"0 0 8px",textTransform:"uppercase",letterSpacing:".07em"}}>Compte</p>
+              <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
+                {accounts.map(a=>{const b=bankById(a.bank);return(
+                  <div key={a.id} className="chip tap" onClick={()=>setAccountId(a.id)}
+                    style={{background:accountId===a.id?b.col+"25":C.card,color:accountId===a.id?b.col:C.muted,borderColor:accountId===a.id?b.col:"transparent"}}>
+                    {a.name.slice(0,14)}
+                  </div>
+                );})}
+              </div>
+            </div>
+          )}
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginTop:4}}>
+            <div className="tap" onClick={()=>setMode("view")} style={{textAlign:"center",padding:"13px",borderRadius:14,background:C.card2,fontSize:14,fontWeight:600,color:C.sec}}>Annuler</div>
+            <div className="tap" onClick={save} style={{textAlign:"center",padding:"13px",borderRadius:14,background:C.accent,fontSize:14,fontWeight:700,color:"#fff"}}>Sauvegarder</div>
+          </div>
+        </>}
+
+        {mode==="confirm"&&<>
+          <p style={{fontSize:14,color:C.red,textAlign:"center",marginBottom:14,fontWeight:500}}>Supprimer cette transaction ? Cette action est irréversible et le solde du compte sera ajusté.</p>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+            <div className="tap" onClick={()=>setMode("view")} style={{textAlign:"center",padding:"13px",borderRadius:14,background:C.card2,fontSize:14,fontWeight:600,color:C.sec}}>Annuler</div>
+            <div className="tap" onClick={onDelete} style={{textAlign:"center",padding:"13px",borderRadius:14,background:C.red,fontSize:14,fontWeight:700,color:"#fff"}}>Supprimer</div>
+          </div>
+        </>}
       </div>
     </div>
   );
@@ -445,13 +530,29 @@ function Home({txns,cats,accounts,budgets,vnpHistory,setTab}){
           </div>
         </div>
         <MonthNav year={year} month={month} onChange={(y,m)=>{setYear(y);setMonth(m);}}/>
-        <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8,marginTop:14}}>
-          {[{l:"Revenus",v:income,c:"#6EE7B7"},{l:"Dépenses",v:expenses,c:"#FCA5A5"},{l:"Épargne",v:savings,c:"#C4B5FD"}].map(m=>(
-            <div key={m.l} style={{background:"rgba(0,0,0,.2)",borderRadius:12,padding:"9px 8px"}}>
-              <p style={{fontSize:9,color:"rgba(255,255,255,.5)",margin:"0 0 3px",textTransform:"uppercase",letterSpacing:".05em"}}>{m.l}</p>
-              <p style={{fontSize:13,fontWeight:700,margin:0,color:m.c}}>{fmt(m.v)}</p>
-            </div>
-          ))}
+        {/* Revenus vs Dépenses — distinction claire */}
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginTop:14}}>
+          <div style={{background:"rgba(16,185,129,.18)",borderRadius:14,padding:"11px 13px",border:"1px solid rgba(16,185,129,.25)"}}>
+            <p style={{fontSize:9,color:"rgba(255,255,255,.55)",margin:"0 0 4px",textTransform:"uppercase",letterSpacing:".06em"}}>↑ Revenus</p>
+            <p style={{fontSize:17,fontWeight:800,margin:"0 0 6px",color:"#6EE7B7",letterSpacing:"-0.5px"}}>{fmt(income)}</p>
+            {budgets["__income"]>0&&<div style={{height:3,background:"rgba(0,0,0,.3)",borderRadius:2}}><div style={{width:`${Math.min(income/(budgets["__income"]||1)*100,100)}%`,height:"100%",background:"#6EE7B7",borderRadius:2}}/></div>}
+          </div>
+          <div style={{background:"rgba(244,63,94,.18)",borderRadius:14,padding:"11px 13px",border:"1px solid rgba(244,63,94,.25)"}}>
+            <p style={{fontSize:9,color:"rgba(255,255,255,.55)",margin:"0 0 4px",textTransform:"uppercase",letterSpacing:".06em"}}>↓ Dépenses</p>
+            <p style={{fontSize:17,fontWeight:800,margin:"0 0 6px",color:"#FCA5A5",letterSpacing:"-0.5px"}}>{fmt(expenses)}</p>
+            {totalBgt>0&&<div style={{height:3,background:"rgba(0,0,0,.3)",borderRadius:2}}><div style={{width:`${Math.min(expenses/(totalBgt||1)*100,100)}%`,height:"100%",background:"#FCA5A5",borderRadius:2}}/></div>}
+          </div>
+        </div>
+        {/* Flux net + Épargne */}
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginTop:8}}>
+          <div style={{background:"rgba(0,0,0,.2)",borderRadius:12,padding:"9px 12px"}}>
+            <p style={{fontSize:9,color:"rgba(255,255,255,.45)",margin:"0 0 3px",textTransform:"uppercase",letterSpacing:".05em"}}>Flux net</p>
+            <p style={{fontSize:15,fontWeight:800,margin:0,letterSpacing:"-0.5px",color:(income-expenses)>=0?"#6EE7B7":"#FCA5A5"}}>{(income-expenses)>=0?"+":""}{fmt(income-expenses)}</p>
+          </div>
+          <div style={{background:"rgba(0,0,0,.2)",borderRadius:12,padding:"9px 12px"}}>
+            <p style={{fontSize:9,color:"rgba(255,255,255,.45)",margin:"0 0 3px",textTransform:"uppercase",letterSpacing:".05em"}}>Épargne</p>
+            <p style={{fontSize:15,fontWeight:800,margin:0,letterSpacing:"-0.5px",color:"#C4B5FD"}}>{fmt(savings)}</p>
+          </div>
         </div>
       </div>
       <div style={{padding:"14px",display:"flex",flexDirection:"column",gap:11}}>
@@ -529,7 +630,7 @@ function Home({txns,cats,accounts,budgets,vnpHistory,setTab}){
 }
 
 // ── ACTIVITY ────────────────────────────────────────────────────────
-function Activity({txns,cats,accounts,deleteTxn}){
+function Activity({txns,cats,accounts,deleteTxn,editTxn}){
   const now=new Date();
   const [year,setYear]=useState(now.getFullYear());const [month,setMonth]=useState(now.getMonth());
   const [type,setType]=useState("all");const [cat,setCat]=useState("all");const [acct,setAcct]=useState("all");const [q,setQ]=useState("");
@@ -548,6 +649,7 @@ function Activity({txns,cats,accounts,deleteTxn}){
   const byDate={};filtered.forEach(t=>{if(!byDate[t.date])byDate[t.date]=[];byDate[t.date].push(t);});
   const groups=Object.entries(byDate).sort((a,b)=>b[0].localeCompare(a[0]));
   function handleDelete(){deleteTxn(selected.id);setSelected(null);}
+  function handleEdit(updated){editTxn(updated);setSelected(null);}
   return(
     <div style={{display:"flex",flexDirection:"column",flex:1,minHeight:0,overflow:"hidden"}}>
       <div style={{background:C.surf,padding:"14px",borderBottom:`1px solid ${C.border}`,flexShrink:0}}>
@@ -590,7 +692,7 @@ function Activity({txns,cats,accounts,deleteTxn}){
           <div style={{height:8}}/>
         </div>
       </div>
-      {selected&&<TxnSheet txn={selected} cats={cats} accounts={accounts} onClose={()=>setSelected(null)} onDelete={handleDelete}/>}
+      {selected&&<TxnSheet txn={selected} cats={cats} accounts={accounts} onClose={()=>setSelected(null)} onDelete={handleDelete} onEdit={handleEdit}/>}
     </div>
   );
 }
@@ -1160,6 +1262,8 @@ Inclure TOUTES les transactions.`}]}]})});
   }
   const toggle=id=>setParsed(p=>p.map(t=>t.id===id?{...t,selected:!t.selected}:t));
   const updateCat=(id,c)=>setParsed(p=>p.map(t=>t.id===id?{...t,category:c}:t));
+  const updateDesc=(id,v)=>setParsed(p=>p.map(t=>t.id===id?{...t,description:v}:t));
+  const updateAmount=(id,v)=>setParsed(p=>p.map(t=>t.id===id?{...t,amount:Math.abs(parseFloat(v)||0)}:t));
   const sel=parsed.filter(t=>t.selected);
   if(showKeyInput)return(
     <div className="scroll" style={{padding:"14px"}}>
@@ -1202,16 +1306,21 @@ Inclure TOUTES les transactions.`}]}]})});
             <span className="tap" onClick={()=>{setStage("upload");setPreview(null);}} style={{fontSize:12,color:C.accent}}>Recommencer</span>
           </div>
           {parsed.map(t=>{const cat=cats.find(c=>c.id===t.category)||cats[3];return(
-            <Card key={t.id} style={{padding:"13px 16px",opacity:t.selected?1:.4,border:t.isDuplicate?`1px solid ${C.orange}33`:`1px solid ${C.border}`}}>
-              {t.isDuplicate&&<p style={{fontSize:11,color:C.orange,margin:"0 0 8px",fontWeight:600}}>⚠️ Possible doublon détecté</p>}
+            <Card key={t.id} style={{padding:"13px 16px",opacity:t.selected?1:.5,border:t.isDuplicate?`1px solid ${C.orange}44`:`1px solid ${C.border}`}}>
+              {t.isDuplicate&&<p style={{fontSize:11,color:C.orange,margin:"0 0 8px",fontWeight:600}}>⚠️ Possible doublon — décoché par défaut</p>}
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:10}}>
                 <div style={{display:"flex",alignItems:"center",gap:10,flex:1,minWidth:0}}>
                   <div className="tap" onClick={()=>toggle(t.id)} style={{width:24,height:24,borderRadius:7,flexShrink:0,background:t.selected?C.accent:"transparent",border:`2px solid ${t.selected?C.accent:C.border2}`,display:"flex",alignItems:"center",justifyContent:"center"}}>
                     {t.selected&&<svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M2 6l3 3 5-5" stroke="white" strokeWidth="2" strokeLinecap="round"/></svg>}
                   </div>
-                  <div style={{minWidth:0}}><p style={{fontSize:14,fontWeight:600,margin:0,color:C.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{t.description}</p><p style={{fontSize:11,margin:"2px 0 0",color:C.muted}}>{t.date}</p></div>
+                  <div style={{flex:1,minWidth:0}}>
+                    <input value={t.description} onChange={e=>updateDesc(t.id,e.target.value)}
+                      style={{width:"100%",fontSize:14,fontWeight:600,border:"none",background:"transparent",padding:0,color:C.text}}/>
+                    <p style={{fontSize:11,margin:"2px 0 0",color:C.muted}}>{t.date}</p>
+                  </div>
                 </div>
-                <p style={{fontSize:14,fontWeight:700,margin:0,flexShrink:0,paddingLeft:8,color:t.type==="income"?C.green:C.text}}>{t.type==="income"?"+":"-"}{fmt(t.amount)}</p>
+                <input type="number" value={t.amount} onChange={e=>updateAmount(t.id,e.target.value)}
+                  style={{width:80,fontSize:14,fontWeight:700,border:"none",background:"transparent",padding:0,color:t.type==="income"?C.green:C.text,textAlign:"right"}}/>
               </div>
               <div style={{display:"flex",flexWrap:"wrap",gap:5}}>
                 {cats.filter(c=>!c.forTypes||c.forTypes.includes(t.type)).map(c=>(
@@ -1227,6 +1336,33 @@ Inclure TOUTES les transactions.`}]}]})});
           </div>
         </>}
         <div style={{height:8}}/>
+      </div>
+    </div>
+  );
+}
+
+// ── SIDE NAV (desktop) ────────────────────────────────────────────────
+function SideNav({tab,setTab}){
+  const items=[{id:"home",l:"Accueil",n:"home"},{id:"activity",l:"Activité",n:"act"},{id:"budget",l:"Budget",n:"bgt"},{id:"stats",l:"Stats",n:"sts"}];
+  return(
+    <div className="snav" style={{display:"none",flexDirection:"column",background:C.surf,borderRight:`1px solid ${C.border}`,padding:"28px 14px",gap:4,flexShrink:0}}>
+      <div style={{display:"flex",alignItems:"center",gap:10,padding:"0 10px",marginBottom:32}}>
+        <div style={{width:36,height:36,borderRadius:11,background:C.accent,display:"flex",alignItems:"center",justifyContent:"center"}}>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><rect x="2" y="6" width="20" height="14" rx="3" stroke="white" strokeWidth="1.8"/><path d="M2 11h20" stroke="white" strokeWidth="1.8"/><circle cx="16" cy="15" r="2" fill="white"/><path d="M6 6V5a2 2 0 014 0v1" stroke="white" strokeWidth="1.8" strokeLinecap="round"/></svg>
+        </div>
+        <span style={{fontSize:16,fontWeight:800,color:C.text,letterSpacing:"-0.5px"}}>MonBudget</span>
+      </div>
+      {items.map(it=>(
+        <div key={it.id} className="tap" onClick={()=>setTab(it.id)} style={{display:"flex",alignItems:"center",gap:12,padding:"11px 12px",borderRadius:14,background:tab===it.id?C.accentL:"transparent",transition:"background .15s"}}>
+          <NavIco n={it.n} active={tab===it.id}/>
+          <span style={{fontSize:14,fontWeight:tab===it.id?700:500,color:tab===it.id?C.accent:C.sec}}>{it.l}</span>
+        </div>
+      ))}
+      <div style={{marginTop:"auto"}}>
+        <div className="tap" onClick={()=>setTab("add")} style={{display:"flex",alignItems:"center",justifyContent:"center",gap:8,padding:"13px",borderRadius:16,background:C.accent,boxShadow:`0 6px 20px ${C.accent}50`}}>
+          <span style={{fontSize:20,color:"white",lineHeight:1,fontWeight:700}}>+</span>
+          <span style={{fontSize:14,fontWeight:700,color:"white"}}>Ajouter</span>
+        </div>
       </div>
     </div>
   );
@@ -1248,7 +1384,7 @@ function BottomNav({tab,setTab}){
   const left=[{id:"home",l:"Accueil",n:"home"},{id:"activity",l:"Activité",n:"act"}];
   const right=[{id:"budget",l:"Budget",n:"bgt"},{id:"stats",l:"Stats",n:"sts"}];
   return(
-    <div style={{position:"fixed",bottom:0,left:0,right:0,background:C.surf,borderTop:`1px solid ${C.border2}`,display:"flex",alignItems:"center",padding:"max(8px, calc(8px + env(safe-area-inset-bottom)/2)) 4px max(14px, calc(14px + env(safe-area-inset-bottom)))",flexShrink:0,zIndex:1000}}>
+    <div className="bnav" style={{position:"fixed",bottom:0,left:0,right:0,background:C.surf,borderTop:`1px solid ${C.border2}`,display:"flex",alignItems:"center",padding:"max(8px, calc(8px + env(safe-area-inset-bottom)/2)) 4px max(14px, calc(14px + env(safe-area-inset-bottom)))",flexShrink:0,zIndex:1000}}>
       {left.map(t=>(
         <div key={t.id} className="tap" onClick={()=>setTab(t.id)} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:4,padding:"4px 0"}}>
           <NavIco n={t.n} active={tab===t.id}/>
@@ -1370,18 +1506,38 @@ function App(){
     setTxns(p=>p.filter(t=>t.id!==id));
   },[txns]);
 
+  // editTxn: update description/amount/category/date, adjust balances for amount change
+  const editTxn=useCallback(updated=>{
+    const old=txns.find(t=>t.id===updated.id);if(!old)return;
+    setAccounts(prev=>{
+      let u=[...prev];
+      const diff=updated.amount-old.amount;
+      if(diff!==0){
+        if(old.type==="expense"&&old.accountId)u=u.map(a=>a.id===old.accountId?{...a,balance:Math.max(0,(+a.balance||0)-diff)}:a);
+        else if(old.type==="income"&&old.accountId)u=u.map(a=>a.id===old.accountId?{...a,balance:(+a.balance||0)+diff}:a);
+        else if(old.type==="epargne"){
+          if(old.accountId)u=u.map(a=>a.id===old.accountId?{...a,balance:Math.max(0,(+a.balance||0)-diff)}:a);
+          if(old.accountToId)u=u.map(a=>a.id===old.accountToId?{...a,balance:(+a.balance||0)+diff}:a);
+        }
+      }
+      return u;
+    });
+    setTxns(p=>p.map(t=>t.id===updated.id?updated:t));
+  },[txns]);
+
   if(!ready)return<div style={{height:"100vh",display:"flex",alignItems:"center",justifyContent:"center",color:C.muted,fontSize:14,background:C.bg}}>Chargement...</div>;
 
   return(
-    <div style={{height:"100%",display:"flex",flexDirection:"column",background:C.bg}}>
-      <div style={{flex:1,display:"flex",flexDirection:"column",overflow:"hidden"}}>
+    <div style={{height:"100%",display:"flex",flexDirection:"row",background:C.bg}}>
+      <SideNav tab={tab} setTab={setTab}/>
+      <div style={{flex:1,display:"flex",flexDirection:"column",overflow:"hidden",minWidth:0}}>
         {tab==="home"     &&<Home txns={txns} cats={cats} accounts={accounts} budgets={budgets} vnpHistory={vnpHistory} setTab={setTab}/>}
-        {tab==="activity" &&<Activity txns={txns} cats={cats} accounts={accounts} deleteTxn={deleteTxn}/>}
+        {tab==="activity" &&<Activity txns={txns} cats={cats} accounts={accounts} deleteTxn={deleteTxn} editTxn={editTxn}/>}
         {tab==="add"      &&<AddTxn addMany={addMany} accounts={accounts} cats={cats} onDone={()=>setTab("home")}/>}
         {tab==="budget"   &&<BudgetView txns={txns} cats={cats} budgets={budgets} setBudgets={setBudgets}/>}
         {tab==="stats"    &&<StatsView txns={txns} cats={cats} setCats={setCats} accounts={accounts} setAccounts={setAccounts} addMany={addMany} vnpHistory={vnpHistory}/>}
+        <BottomNav tab={tab} setTab={setTab}/>
       </div>
-      <BottomNav tab={tab} setTab={setTab}/>
     </div>
   );
 }
