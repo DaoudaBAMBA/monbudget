@@ -827,7 +827,7 @@ function StatsView({txns,cats,setCats,accounts,setAccounts,addMany,vnpHistory}){
           </div>
         ))}
       </div>
-      <div style={{flex:1,overflow:"hidden"}}>
+      <div style={{flex:1,overflow:"hidden",display:"flex",flexDirection:"column"}}>
         {sub==="charts" &&<ChartsView txns={txns} cats={cats} accounts={accounts} vnpHistory={vnpHistory}/>}
         {sub==="comptes"&&<ComptesView accounts={accounts} setAccounts={setAccounts}/>}
         {sub==="cats"   &&<CatsView cats={cats} setCats={setCats}/>}
