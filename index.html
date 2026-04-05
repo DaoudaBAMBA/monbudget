@@ -411,7 +411,7 @@ function TxnSheet({txn,cats,accounts,onClose,onDelete,onEdit}){
   return(
     <div style={{position:"fixed",inset:0,zIndex:200,display:"flex",flexDirection:"column",justifyContent:"flex-end"}} onClick={mode==="edit"?undefined:onClose}>
       <div className="overlay" style={{position:"absolute",inset:0,background:"rgba(0,0,0,.6)",backdropFilter:"blur(4px)"}} onClick={mode==="edit"?onClose:undefined}/>
-      <div className="sheet" onClick={e=>e.stopPropagation()} style={{background:C.surf,borderRadius:"24px 24px 0 0",padding:"20px 20px 36px",position:"relative",border:`1px solid ${C.border2}`,maxHeight:"90vh",overflowY:"auto"}}>
+      <div className="sheet" onClick={e=>e.stopPropagation()} style={{background:C.surf,borderRadius:"24px 24px 0 0",padding:"20px 20px max(90px, calc(80px + env(safe-area-inset-bottom)))",position:"relative",border:`1px solid ${C.border2}`,maxHeight:"92vh",overflowY:"auto"}}>
         <div style={{width:36,height:4,borderRadius:2,background:C.border2,margin:"0 auto 18px"}}/>
 
         {mode==="view"&&<>
@@ -837,12 +837,16 @@ function BudgetView({txns,cats,budgets,setBudgets}){
   const mt=txns.filter(t=>t.date?.startsWith(mk));
   const incomeActual=mt.filter(t=>t.type==="income").reduce((s,t)=>s+t.amount,0);
   const bycat={};mt.filter(t=>t.type==="expense").forEach(t=>{bycat[t.category]=(bycat[t.category]||0)+t.amount;});
+  const bysav={};mt.filter(t=>t.type==="epargne").forEach(t=>{bysav[t.category]=(bysav[t.category]||0)+t.amount;});
   const [editing,setEditing]=useState(null);const [editVal,setEditVal]=useState("");
   const incomeBgt=+(budgets["__income"]||0);
-  const totalExpBgt=Object.entries(budgets).filter(([k])=>k!=="__income").reduce((s,[,v])=>s+(+v||0),0);
+  const totalExpBgt=Object.entries(budgets).filter(([k])=>!["__income","__epargne"].includes(k)&&cats.find(c=>c.id===k&&c.forTypes?.includes("expense"))).reduce((s,[,v])=>s+(+v||0),0);
   const totalSpent=Object.keys(bycat).reduce((s,c)=>s+(bycat[c]||0),0);
+  const epagneBgt=+(budgets["__epargne"]||0);
+  const savingsActual=mt.filter(t=>t.type==="epargne").reduce((s,t)=>s+t.amount,0);
   function save(key){const n=parseFloat(editVal.replace(",","."));setBudgets(p=>({...p,[key]:isNaN(n)||n<=0?0:n}));setEditing(null);}
   const expCats=cats.filter(c=>c.forTypes?.includes("expense"));
+  const savCats=cats.filter(c=>c.forTypes?.includes("epargne"));
   return(
     <div className="scroll">
       <div style={{background:C.accentB,padding:"18px 20px 24px",borderBottomLeftRadius:28,borderBottomRightRadius:28}}>
@@ -927,6 +931,80 @@ function BudgetView({txns,cats,budgets,setBudgets}){
             );
           })}
         </Card>
+        {/* Épargne objectif mensuel */}
+        <Card style={{padding:"13px 16px"}}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+            <div style={{display:"flex",alignItems:"center",gap:10}}>
+              <CatIconBadge cat={{id:"epargne",color:C.accent}} size={34}/>
+              <div>
+                <p style={{fontSize:14,fontWeight:600,margin:0,color:C.text}}>Épargne mensuelle visée</p>
+                <p style={{fontSize:11,margin:0,color:epagneBgt>0&&savingsActual>=epagneBgt?C.accent:C.muted}}>
+                  {epagneBgt>0?`${fmt(savingsActual)} épargné / ${fmt(epagneBgt)} visé`:"Pas d'objectif défini"}
+                </p>
+              </div>
+            </div>
+            {editing==="__epargne"
+              ?<div style={{display:"flex",gap:6,alignItems:"center"}}>
+                <input autoFocus value={editVal} onChange={e=>setEditVal(e.target.value)} onBlur={()=>save("__epargne")} onKeyDown={e=>e.key==="Enter"&&save("__epargne")}
+                  style={{width:90,fontSize:15,fontWeight:700,textAlign:"right",border:"none",background:C.card2,borderRadius:10,padding:"6px 10px",color:C.text}}/>
+                <span style={{fontSize:11,color:C.muted}}>$</span>
+              </div>
+              :<span className="tap" onClick={()=>{setEditing("__epargne");setEditVal(epagneBgt>0?String(epagneBgt):"");}}
+                style={{fontSize:14,fontWeight:700,color:epagneBgt>0?C.accent:C.muted,background:epagneBgt===0?C.card2:"transparent",padding:epagneBgt===0?"6px 12px":"0",borderRadius:10}}>
+                {epagneBgt>0?fmt(epagneBgt):"Définir"}
+              </span>
+            }
+          </div>
+          {epagneBgt>0&&(
+            <div style={{marginTop:10}}>
+              <div style={{height:4,background:C.border2,borderRadius:2}}><div style={{width:`${Math.min(savingsActual/epagneBgt*100,100)}%`,height:"100%",background:C.accent,borderRadius:2}}/></div>
+              <p style={{fontSize:10,color:C.muted,margin:"3px 0 0"}}>{Math.round(savingsActual/epagneBgt*100)}% atteint</p>
+            </div>
+          )}
+        </Card>
+        {/* Épargne par catégorie */}
+        {savCats.length>0&&(
+          <Card>
+            {savCats.map((cat,i,arr)=>{
+              const bgt=+(budgets[cat.id]||0);const sav=bysav[cat.id]||0;
+              const pct=bgt>0?Math.min(sav/bgt*100,100):0;
+              const col=pct>=100?C.accent:pct>=80?C.teal:C.muted;const isEdit=editing===cat.id;
+              return(
+                <div key={cat.id} style={{padding:"12px 16px",borderBottom:i<arr.length-1?`1px solid ${C.border}`:"none"}}>
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:bgt>0?8:0}}>
+                    <div style={{display:"flex",alignItems:"center",gap:10}}>
+                      <CatIconBadge cat={cat} size={34}/>
+                      <div>
+                        <p style={{fontSize:13,fontWeight:500,margin:0,color:C.text}}>{cat.label}</p>
+                        <p style={{fontSize:10,margin:0,color:C.muted}}>{bgt>0?`${fmt(sav)} / ${fmt(bgt)}`:"Aucun objectif"}</p>
+                      </div>
+                    </div>
+                    {isEdit
+                      ?<div style={{display:"flex",gap:6,alignItems:"center"}}>
+                        <input autoFocus value={editVal} onChange={e=>setEditVal(e.target.value)} onBlur={()=>save(cat.id)} onKeyDown={e=>e.key==="Enter"&&save(cat.id)}
+                          style={{width:85,fontSize:14,fontWeight:700,textAlign:"right",border:"none",background:C.card2,borderRadius:10,padding:"6px 9px",color:C.text}}/>
+                        <span style={{fontSize:11,color:C.muted}}>$</span>
+                      </div>
+                      :<span className="tap" onClick={()=>{setEditing(cat.id);setEditVal(bgt>0?String(bgt):"");}}
+                        style={{fontSize:14,fontWeight:700,color:bgt>0?C.accent:C.muted,background:bgt===0?C.card2:"transparent",padding:bgt===0?"5px 11px":"0",borderRadius:10}}>
+                        {bgt>0?fmt(bgt):"Définir"}
+                      </span>
+                    }
+                  </div>
+                  {bgt>0&&(
+                    <>
+                      <div style={{height:4,background:C.border2,borderRadius:2}}><div style={{width:`${pct}%`,height:"100%",background:C.accent,borderRadius:2,transition:"width .4s"}}/></div>
+                      <div style={{display:"flex",justifyContent:"space-between",marginTop:4}}>
+                        <span style={{fontSize:10,color:C.muted}}>{Math.round(pct)}%</span>
+                        <span style={{fontSize:10,color:pct>=100?C.accent:C.muted}}>{pct>=100?"Objectif atteint ! 🎉":"Reste "+fmt(bgt-sav)}</span>
+                      </div>
+                    </>
+                  )}
+                </div>
+              );
+            })}
+          </Card>
+        )}
         <div style={{height:8}}/>
       </div>
     </div>
