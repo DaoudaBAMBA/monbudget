@@ -617,8 +617,9 @@ function Home({txns,cats,accounts,budgets,vnpHistory,setTab}){
   const assets=accounts.filter(a=>atypeById(a.accountType).isDebt===false&&a.balance!=null).reduce((s,a)=>s+(+a.balance||0),0);
   const liab=accounts.filter(a=>atypeById(a.accountType)?.isDebt===true).reduce((s,a)=>s+(+a.balance||0),0);
   const vnp=assets-liab;
-  const savingsBgt=+(budgets["__epargne"]||0);
-  const totalBgt=Object.entries(budgets).filter(([k])=>!["__income","__epargne"].includes(k)).reduce((s,[,v])=>s+(+v||0),0);
+  const savingsBgt=Object.entries(budgets).filter(([k])=>cats.find(c=>c.id===k&&c.forTypes?.includes("epargne"))).reduce((s,[,v])=>s+(+v||0),0);
+  const incomeBgt=Object.entries(budgets).filter(([k])=>cats.find(c=>c.id===k&&c.forTypes?.includes("income"))).reduce((s,[,v])=>s+(+v||0),0);
+  const totalBgt=Object.entries(budgets).filter(([k])=>cats.find(c=>c.id===k&&c.forTypes?.includes("expense"))).reduce((s,[,v])=>s+(+v||0),0);
   const bycat={};mt.filter(t=>t.type==="expense").forEach(t=>{bycat[t.category]=(bycat[t.category]||0)+t.amount;});
   const topCats=Object.entries(bycat).sort((a,b)=>b[1]-a[1]).slice(0,3);
   const budgetPct=totalBgt>0?expenses/totalBgt*100:0;
@@ -637,7 +638,7 @@ function Home({txns,cats,accounts,budgets,vnpHistory,setTab}){
           <div style={{background:"rgba(16,185,129,.18)",borderRadius:14,padding:"11px 13px",border:"1px solid rgba(16,185,129,.25)"}}>
             <p style={{fontSize:9,color:"rgba(255,255,255,.55)",margin:"0 0 4px",textTransform:"uppercase",letterSpacing:".06em"}}>↑ Revenus</p>
             <p style={{fontSize:17,fontWeight:800,margin:"0 0 6px",color:"#6EE7B7",letterSpacing:"-0.5px"}}>{fmt(income)}</p>
-            {budgets["__income"]>0&&<div style={{height:3,background:"rgba(0,0,0,.3)",borderRadius:2}}><div style={{width:`${Math.min(income/(budgets["__income"]||1)*100,100)}%`,height:"100%",background:"#6EE7B7",borderRadius:2}}/></div>}
+            {incomeBgt>0&&<div style={{height:3,background:"rgba(0,0,0,.3)",borderRadius:2}}><div style={{width:`${Math.min(income/(incomeBgt||1)*100,100)}%`,height:"100%",background:"#6EE7B7",borderRadius:2}}/></div>}
           </div>
           <div style={{background:"rgba(244,63,94,.18)",borderRadius:14,padding:"11px 13px",border:"1px solid rgba(244,63,94,.25)"}}>
             <p style={{fontSize:9,color:"rgba(255,255,255,.55)",margin:"0 0 4px",textTransform:"uppercase",letterSpacing:".06em"}}>↓ Dépenses</p>
@@ -975,16 +976,16 @@ function BudgetView({txns,cats,budgets,setBudgets}){
   const [editing,setEditing]=useState(null);const [editVal,setEditVal]=useState("");
   const [collapsed,setCollapsed]=useState({});
   function toggle(id){setCollapsed(p=>({...p,[id]:!p[id]}));}
-  const incomeBgt=+(budgets["__income"]||0);
-  const incomeActual=mt.filter(t=>t.type==="income").reduce((s,t)=>s+t.amount,0);
-  const epagneBgt=+(budgets["__epargne"]||0);
-  const savingsActual=mt.filter(t=>t.type==="epargne").reduce((s,t)=>s+t.amount,0);
-  const totalExpBgt=Object.entries(budgets).filter(([k])=>!["__income","__epargne"].includes(k)&&cats.find(c=>c.id===k&&c.forTypes?.includes("expense"))).reduce((s,[,v])=>s+(+v||0),0);
-  const totalSpent=Object.keys(bycat).reduce((s,c)=>s+(bycat[c]||0),0);
-  function save(key){const n=parseFloat(editVal.replace(",","."));setBudgets(p=>({...p,[key]:isNaN(n)||n<=0?0:n}));setEditing(null);}
   const expCats=cats.filter(c=>c.forTypes?.includes("expense"));
   const incCats=cats.filter(c=>c.forTypes?.includes("income"));
   const savCats=cats.filter(c=>c.forTypes?.includes("epargne"));
+  const incomeActual=mt.filter(t=>t.type==="income").reduce((s,t)=>s+t.amount,0);
+  const savingsActual=mt.filter(t=>t.type==="epargne").reduce((s,t)=>s+t.amount,0);
+  const totalExpBgt=Object.entries(budgets).filter(([k])=>cats.find(c=>c.id===k&&c.forTypes?.includes("expense"))).reduce((s,[,v])=>s+(+v||0),0);
+  const incTotalBgt=Object.entries(budgets).filter(([k])=>incCats.find(c=>c.id===k)).reduce((s,[,v])=>s+(+v||0),0);
+  const savTotalBgt=Object.entries(budgets).filter(([k])=>savCats.find(c=>c.id===k)).reduce((s,[,v])=>s+(+v||0),0);
+  const totalSpent=Object.keys(bycat).reduce((s,c)=>s+(bycat[c]||0),0);
+  function save(key){const n=parseFloat(editVal.replace(",","."));setBudgets(p=>({...p,[key]:isNaN(n)||n<=0?0:n}));setEditing(null);}
 
   // ── helper: chevron icon ──
   function Chevron({open}){return(
@@ -1089,29 +1090,6 @@ function BudgetView({txns,cats,budgets,setBudgets}){
     return <Card>{rows}</Card>;
   }
 
-  // ── helper: global target header row ──
-  function globalTargetRow(keyId,label,actual,bgt,col){
-    return(
-      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:6,paddingLeft:2}}>
-        <p style={{fontSize:11,fontWeight:700,color:col,textTransform:"uppercase",letterSpacing:".07em",margin:0}}>{label}</p>
-        <div style={{display:"flex",alignItems:"center",gap:6}}>
-          <span style={{fontSize:9,color:C.muted}}>Total visé :</span>
-          {editing===keyId
-            ?<div style={{display:"flex",gap:4,alignItems:"center"}}>
-              <input autoFocus value={editVal} onChange={e=>setEditVal(e.target.value)} onBlur={()=>save(keyId)} onKeyDown={e=>e.key==="Enter"&&save(keyId)}
-                style={{width:74,fontSize:13,fontWeight:700,textAlign:"right",border:"none",background:C.card2,borderRadius:8,padding:"4px 8px",color:C.text}}/>
-              <span style={{fontSize:10,color:C.muted}}>$</span>
-            </div>
-            :<span className="tap" onClick={()=>{setEditing(keyId);setEditVal(bgt>0?String(bgt):"");}}
-              style={{fontSize:13,fontWeight:700,color:bgt>0?col:C.muted,background:bgt===0?C.card2:"transparent",padding:bgt===0?"3px 9px":"0",borderRadius:8}}>
-              {bgt>0?fmt(bgt):"Définir"}
-            </span>
-          }
-        </div>
-      </div>
-    );
-  }
-
   return(
     <div className="scroll">
       <div style={{background:C.accentB,padding:"18px 20px 22px",borderBottomLeftRadius:28,borderBottomRightRadius:28}}>
@@ -1127,32 +1105,41 @@ function BudgetView({txns,cats,budgets,setBudgets}){
 
         {/* ── REVENUS ── */}
         <div>
-          {globalTargetRow("__income","Revenus",incomeActual,incomeBgt,C.green)}
-          {incomeBgt>0&&<div style={{marginBottom:8,background:C.card,borderRadius:12,padding:"7px 12px",border:`1px solid ${C.border}`}}>
+          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:6,paddingLeft:2}}>
+            <p style={{fontSize:11,fontWeight:700,color:C.green,textTransform:"uppercase",letterSpacing:".07em",margin:0}}>Revenus</p>
+            {incTotalBgt>0&&<span style={{fontSize:11,color:C.sec}}>{fmt(incomeActual)} / {fmt(incTotalBgt)}</span>}
+          </div>
+          {incTotalBgt>0&&<div style={{marginBottom:8,background:C.card,borderRadius:12,padding:"7px 12px",border:`1px solid ${C.border}`}}>
             <div style={{display:"flex",justifyContent:"space-between",marginBottom:3}}>
-              <span style={{fontSize:11,color:C.sec}}>{fmt(incomeActual)} / {fmt(incomeBgt)}</span>
-              <span style={{fontSize:11,fontWeight:700,color:incomeActual>=incomeBgt?C.green:C.muted}}>{Math.round(incomeActual/incomeBgt*100)}%</span>
+              <span style={{fontSize:9,color:C.muted}}>Total des budgets</span>
+              <span style={{fontSize:11,fontWeight:700,color:incomeActual>=incTotalBgt?C.green:C.muted}}>{Math.round(incomeActual/(incTotalBgt||1)*100)}%</span>
             </div>
-            <div style={{height:4,background:C.border2,borderRadius:2}}><div style={{width:`${Math.min(incomeActual/incomeBgt*100,100)}%`,height:"100%",background:C.green,borderRadius:2}}/></div>
+            <div style={{height:4,background:C.border2,borderRadius:2}}><div style={{width:`${Math.min(incomeActual/(incTotalBgt||1)*100,100)}%`,height:"100%",background:C.green,borderRadius:2}}/></div>
           </div>}
           {hierSection(incCats,byinc,C.green)}
         </div>
 
         {/* ── DÉPENSES ── */}
         <div>
-          <p style={{fontSize:11,fontWeight:700,color:C.red,textTransform:"uppercase",letterSpacing:".07em",margin:"0 0 8px",paddingLeft:2}}>Dépenses</p>
+          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:6,paddingLeft:2}}>
+            <p style={{fontSize:11,fontWeight:700,color:C.red,textTransform:"uppercase",letterSpacing:".07em",margin:0}}>Dépenses</p>
+            {totalExpBgt>0&&<span style={{fontSize:11,color:C.sec}}>{fmt(totalSpent)} / {fmt(totalExpBgt)}</span>}
+          </div>
           {hierSection(expCats,bycat,C.green)}
         </div>
 
         {/* ── ÉPARGNE ── */}
         <div>
-          {globalTargetRow("__epargne","Épargne",savingsActual,epagneBgt,C.accent)}
-          {epagneBgt>0&&<div style={{marginBottom:8,background:C.card,borderRadius:12,padding:"7px 12px",border:`1px solid ${C.border}`}}>
+          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:6,paddingLeft:2}}>
+            <p style={{fontSize:11,fontWeight:700,color:C.accent,textTransform:"uppercase",letterSpacing:".07em",margin:0}}>Épargne</p>
+            {savTotalBgt>0&&<span style={{fontSize:11,color:C.sec}}>{fmt(savingsActual)} / {fmt(savTotalBgt)}</span>}
+          </div>
+          {savTotalBgt>0&&<div style={{marginBottom:8,background:C.card,borderRadius:12,padding:"7px 12px",border:`1px solid ${C.border}`}}>
             <div style={{display:"flex",justifyContent:"space-between",marginBottom:3}}>
-              <span style={{fontSize:11,color:C.sec}}>{fmt(savingsActual)} / {fmt(epagneBgt)}</span>
-              <span style={{fontSize:11,fontWeight:700,color:savingsActual>=epagneBgt?C.accent:C.muted}}>{Math.round(savingsActual/epagneBgt*100)}%</span>
+              <span style={{fontSize:9,color:C.muted}}>Total des budgets</span>
+              <span style={{fontSize:11,fontWeight:700,color:savingsActual>=savTotalBgt?C.accent:C.muted}}>{Math.round(savingsActual/(savTotalBgt||1)*100)}%</span>
             </div>
-            <div style={{height:4,background:C.border2,borderRadius:2}}><div style={{width:`${Math.min(savingsActual/epagneBgt*100,100)}%`,height:"100%",background:C.accent,borderRadius:2}}/></div>
+            <div style={{height:4,background:C.border2,borderRadius:2}}><div style={{width:`${Math.min(savingsActual/(savTotalBgt||1)*100,100)}%`,height:"100%",background:C.accent,borderRadius:2}}/></div>
           </div>}
           {hierSection(savCats,bysav,C.accent)}
         </div>
