@@ -969,268 +969,319 @@ function AddTxn({addMany,accounts,cats,onDone}){
 function BudgetView({txns,cats,budgets,setBudgets}){
   const now=new Date();const mk=monthKey();
   const mt=txns.filter(t=>t.date?.startsWith(mk));
-  const incomeActual=mt.filter(t=>t.type==="income").reduce((s,t)=>s+t.amount,0);
+  const byinc={};mt.filter(t=>t.type==="income").forEach(t=>{byinc[t.category]=(byinc[t.category]||0)+t.amount;});
   const bycat={};mt.filter(t=>t.type==="expense").forEach(t=>{bycat[t.category]=(bycat[t.category]||0)+t.amount;});
   const bysav={};mt.filter(t=>t.type==="epargne").forEach(t=>{bysav[t.category]=(bysav[t.category]||0)+t.amount;});
   const [editing,setEditing]=useState(null);const [editVal,setEditVal]=useState("");
+  const [collapsed,setCollapsed]=useState({});
+  function toggle(id){setCollapsed(p=>({...p,[id]:!p[id]}));}
   const incomeBgt=+(budgets["__income"]||0);
-  const totalExpBgt=Object.entries(budgets).filter(([k])=>!["__income","__epargne"].includes(k)&&cats.find(c=>c.id===k&&c.forTypes?.includes("expense"))).reduce((s,[,v])=>s+(+v||0),0);
-  const totalSpent=Object.keys(bycat).reduce((s,c)=>s+(bycat[c]||0),0);
+  const incomeActual=mt.filter(t=>t.type==="income").reduce((s,t)=>s+t.amount,0);
   const epagneBgt=+(budgets["__epargne"]||0);
   const savingsActual=mt.filter(t=>t.type==="epargne").reduce((s,t)=>s+t.amount,0);
+  const totalExpBgt=Object.entries(budgets).filter(([k])=>!["__income","__epargne"].includes(k)&&cats.find(c=>c.id===k&&c.forTypes?.includes("expense"))).reduce((s,[,v])=>s+(+v||0),0);
+  const totalSpent=Object.keys(bycat).reduce((s,c)=>s+(bycat[c]||0),0);
   function save(key){const n=parseFloat(editVal.replace(",","."));setBudgets(p=>({...p,[key]:isNaN(n)||n<=0?0:n}));setEditing(null);}
   const expCats=cats.filter(c=>c.forTypes?.includes("expense"));
+  const incCats=cats.filter(c=>c.forTypes?.includes("income"));
   const savCats=cats.filter(c=>c.forTypes?.includes("epargne"));
-  return(
-    <div className="scroll">
-      <div style={{background:C.accentB,padding:"18px 20px 24px",borderBottomLeftRadius:28,borderBottomRightRadius:28}}>
-        <p style={{fontSize:11,color:"rgba(255,255,255,.5)",margin:"0 0 2px",textTransform:"uppercase",letterSpacing:".07em"}}>Budget — {MFULL[now.getMonth()]}</p>
-        <p style={{fontSize:32,fontWeight:800,margin:"0 0 3px",letterSpacing:"-1px"}}>{fmt(totalExpBgt)}</p>
-        <p style={{fontSize:13,color:totalSpent>totalExpBgt?"#FCA5A5":"#A7F3D0",margin:"0 0 10px"}}>{fmt(totalSpent)} dépensé · {fmt(Math.max(0,totalExpBgt-totalSpent))} restant</p>
-        <div style={{height:7,background:"rgba(0,0,0,.3)",borderRadius:4}}>
-          <div style={{width:`${Math.min(totalExpBgt>0?totalSpent/totalExpBgt*100:0,100)}%`,height:"100%",background:totalSpent>totalExpBgt?C.red:totalSpent/totalExpBgt>0.8?C.orange:C.green,borderRadius:4,transition:"width .5s"}}/>
+
+  // ── helper: chevron icon ──
+  function Chevron({open}){return(
+    <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+      <path d={open?"M2 4l4 4 4-4":"M4 2l4 4-4 4"} stroke={C.muted} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+    </svg>
+  );}
+
+  // ── helper: sub-category row ──
+  function subRow(sub,byspent,accentCol,isLast){
+    const bgt=+(budgets[sub.id]||0);const spent=byspent[sub.id]||0;
+    const pct=bgt>0?Math.min(spent/bgt*100,100):0;
+    const col=pct>=100?C.red:pct>=80?C.orange:accentCol;
+    return(
+      <div key={sub.id} style={{padding:"9px 14px 9px 32px",borderBottom:!isLast?`1px solid ${C.border}`:"none",background:"rgba(255,255,255,.02)"}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:bgt>0?6:0}}>
+          <div style={{display:"flex",alignItems:"center",gap:7}}>
+            <div style={{width:10,height:10,borderLeft:`2px solid ${C.border2}`,borderBottom:`2px solid ${C.border2}`,borderRadius:"0 0 0 3px",flexShrink:0,marginRight:2}}/>
+            <CatIconBadge cat={sub} size={26}/>
+            <div>
+              <p style={{fontSize:12,fontWeight:500,margin:0,color:C.sec}}>{sub.label}</p>
+              <p style={{fontSize:9,margin:0,color:C.muted}}>{bgt>0?`${fmt(spent)} / ${fmt(bgt)}`:`${fmt(spent)} enregistré`}</p>
+            </div>
+          </div>
+          {editing===sub.id
+            ?<div style={{display:"flex",gap:4,alignItems:"center"}}>
+              <input autoFocus value={editVal} onChange={e=>setEditVal(e.target.value)} onBlur={()=>save(sub.id)} onKeyDown={e=>e.key==="Enter"&&save(sub.id)}
+                style={{width:72,fontSize:12,fontWeight:700,textAlign:"right",border:"none",background:C.card2,borderRadius:8,padding:"4px 7px",color:C.text}}/>
+              <span style={{fontSize:10,color:C.muted}}>$</span>
+            </div>
+            :<span className="tap" onClick={()=>{setEditing(sub.id);setEditVal(bgt>0?String(bgt):"");}}
+              style={{fontSize:12,fontWeight:700,color:bgt>0?C.text:C.muted,background:bgt===0?C.card2:"transparent",padding:bgt===0?"3px 8px":"0",borderRadius:8}}>
+              {bgt>0?fmt(bgt):"Définir"}
+            </span>
+          }
+        </div>
+        {bgt>0&&<div style={{paddingLeft:22}}>
+          <div style={{height:3,background:C.border2,borderRadius:2}}><div style={{width:`${pct}%`,height:"100%",background:col,borderRadius:2,transition:"width .4s"}}/></div>
+          <div style={{display:"flex",justifyContent:"space-between",marginTop:2}}>
+            <span style={{fontSize:9,color:C.muted}}>{Math.round(pct)}%</span>
+            <span style={{fontSize:9,color:pct>=100?C.red:pct>=80?C.orange:C.muted}}>{pct>=100?"Dépassé":"Reste "+fmt(bgt-spent)}</span>
+          </div>
+        </div>}
+      </div>
+    );
+  }
+
+  // ── helper: render one hierarchical section ──
+  function hierSection(typeCats,byspent,accentCol){
+    const parents=typeCats.filter(c=>!c.parentId);
+    if(parents.length===0)return null;
+    const rows=[];
+    parents.forEach((par,pi)=>{
+      const subs=typeCats.filter(c=>c.parentId===par.id);
+      const allIds=[par.id,...subs.map(s=>s.id)];
+      const parSpent=allIds.reduce((s,id)=>s+(byspent[id]||0),0);
+      const parBgt=allIds.reduce((s,id)=>s+(+(budgets[id]||0)),0);
+      const parPct=parBgt>0?Math.min(parSpent/parBgt*100,100):0;
+      const parCol=parPct>=100?C.red:parPct>=80?C.orange:accentCol;
+      const hasSubs=subs.length>0;
+      const isLast=pi===parents.length-1;
+      const open=!collapsed[par.id];
+      rows.push(
+        <React.Fragment key={par.id}>
+          <div style={{padding:"11px 14px",borderBottom:(hasSubs&&open)||!isLast?`1px solid ${C.border}`:"none"}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:parBgt>0?8:0}}>
+              <div style={{display:"flex",alignItems:"center",gap:9,flex:1,minWidth:0}}>
+                <div className="tap" onClick={()=>hasSubs&&toggle(par.id)}
+                  style={{display:"flex",alignItems:"center",justifyContent:"center",width:22,height:22,flexShrink:0,borderRadius:6,background:hasSubs?C.card2:"transparent",cursor:hasSubs?"pointer":"default"}}>
+                  {hasSubs?<Chevron open={open}/>:<div style={{width:12}}/>}
+                </div>
+                <CatIconBadge cat={par} size={34}/>
+                <div style={{minWidth:0,flex:1}}>
+                  <p style={{fontSize:13,fontWeight:700,margin:0,color:C.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{par.label}</p>
+                  <p style={{fontSize:9,margin:0,color:C.muted}}>{parBgt>0?`${fmt(parSpent)} / ${fmt(parBgt)}`:`${fmt(parSpent)} enregistré`}</p>
+                </div>
+              </div>
+              {editing===par.id
+                ?<div style={{display:"flex",gap:5,alignItems:"center"}}>
+                  <input autoFocus value={editVal} onChange={e=>setEditVal(e.target.value)} onBlur={()=>save(par.id)} onKeyDown={e=>e.key==="Enter"&&save(par.id)}
+                    style={{width:78,fontSize:13,fontWeight:700,textAlign:"right",border:"none",background:C.card2,borderRadius:10,padding:"5px 8px",color:C.text}}/>
+                  <span style={{fontSize:11,color:C.muted}}>$</span>
+                </div>
+                :<span className="tap" onClick={()=>{setEditing(par.id);setEditVal(+(budgets[par.id]||0)>0?String(budgets[par.id]):"");}}
+                  style={{fontSize:13,fontWeight:700,color:parBgt>0?C.text:C.muted,background:parBgt===0?C.card2:"transparent",padding:parBgt===0?"4px 10px":"0",borderRadius:10}}>
+                  {parBgt>0?fmt(parBgt):"Définir"}
+                </span>
+              }
+            </div>
+            {parBgt>0&&<>
+              <div style={{height:4,background:C.border2,borderRadius:2,marginLeft:31}}><div style={{width:`${parPct}%`,height:"100%",background:parCol,borderRadius:2,transition:"width .4s"}}/></div>
+              <div style={{display:"flex",justifyContent:"space-between",marginTop:3,marginLeft:31}}>
+                <span style={{fontSize:9,color:C.muted}}>{Math.round(parPct)}%</span>
+                <span style={{fontSize:9,color:parPct>=100?C.red:parPct>=80?C.orange:C.muted}}>{parPct>=100?"Dépassé de "+fmt(parSpent-parBgt):"Reste "+fmt(parBgt-parSpent)}</span>
+              </div>
+            </>}
+          </div>
+          {open&&subs.map((sub,si)=>subRow(sub,byspent,accentCol,isLast&&si===subs.length-1))}
+        </React.Fragment>
+      );
+    });
+    return <Card>{rows}</Card>;
+  }
+
+  // ── helper: global target header row ──
+  function globalTargetRow(keyId,label,actual,bgt,col){
+    return(
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:6,paddingLeft:2}}>
+        <p style={{fontSize:11,fontWeight:700,color:col,textTransform:"uppercase",letterSpacing:".07em",margin:0}}>{label}</p>
+        <div style={{display:"flex",alignItems:"center",gap:6}}>
+          <span style={{fontSize:9,color:C.muted}}>Total visé :</span>
+          {editing===keyId
+            ?<div style={{display:"flex",gap:4,alignItems:"center"}}>
+              <input autoFocus value={editVal} onChange={e=>setEditVal(e.target.value)} onBlur={()=>save(keyId)} onKeyDown={e=>e.key==="Enter"&&save(keyId)}
+                style={{width:74,fontSize:13,fontWeight:700,textAlign:"right",border:"none",background:C.card2,borderRadius:8,padding:"4px 8px",color:C.text}}/>
+              <span style={{fontSize:10,color:C.muted}}>$</span>
+            </div>
+            :<span className="tap" onClick={()=>{setEditing(keyId);setEditVal(bgt>0?String(bgt):"");}}
+              style={{fontSize:13,fontWeight:700,color:bgt>0?col:C.muted,background:bgt===0?C.card2:"transparent",padding:bgt===0?"3px 9px":"0",borderRadius:8}}>
+              {bgt>0?fmt(bgt):"Définir"}
+            </span>
+          }
         </div>
       </div>
-      <div style={{padding:"12px 14px",display:"flex",flexDirection:"column",gap:10}}>
-        {/* Revenue target */}
-        <Card style={{padding:"13px 16px"}}>
-          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-            <div style={{display:"flex",alignItems:"center",gap:10}}>
-              <CatIconBadge cat={{id:"revenus",color:C.green,icon:"dollar"}} size={34}/>
-              <div>
-                <p style={{fontSize:14,fontWeight:600,margin:0,color:C.text}}>Revenus visés</p>
-                <p style={{fontSize:11,margin:0,color:incomeBgt>0&&incomeActual>=incomeBgt?C.green:C.muted}}>
-                  {incomeBgt>0?`${fmt(incomeActual)} reçu / ${fmt(incomeBgt)} visé`:"Pas de cible définie"}
-                </p>
-              </div>
+    );
+  }
+
+  return(
+    <div className="scroll">
+      <div style={{background:C.accentB,padding:"18px 20px 22px",borderBottomLeftRadius:28,borderBottomRightRadius:28}}>
+        <p style={{fontSize:11,color:"rgba(255,255,255,.5)",margin:"0 0 2px",textTransform:"uppercase",letterSpacing:".07em"}}>Dépenses — {MFULL[now.getMonth()]}</p>
+        <p style={{fontSize:30,fontWeight:800,margin:"0 0 3px",letterSpacing:"-1px"}}>{fmt(totalExpBgt)}</p>
+        <p style={{fontSize:13,color:totalSpent>totalExpBgt?"#FCA5A5":"#A7F3D0",margin:"0 0 10px"}}>{fmt(totalSpent)} dépensé · {fmt(Math.max(0,totalExpBgt-totalSpent))} restant</p>
+        <div style={{height:6,background:"rgba(0,0,0,.3)",borderRadius:3}}>
+          <div style={{width:`${Math.min(totalExpBgt>0?totalSpent/totalExpBgt*100:0,100)}%`,height:"100%",background:totalSpent>totalExpBgt?C.red:totalSpent/totalExpBgt>0.8?C.orange:C.green,borderRadius:3,transition:"width .5s"}}/>
+        </div>
+      </div>
+      <div style={{padding:"12px 14px",display:"flex",flexDirection:"column",gap:12}}>
+        <p style={{fontSize:10,color:C.muted,paddingLeft:4}}>Touche un montant pour modifier · ▸ pour dérouler les sous-catégories</p>
+
+        {/* ── REVENUS ── */}
+        <div>
+          {globalTargetRow("__income","Revenus",incomeActual,incomeBgt,C.green)}
+          {incomeBgt>0&&<div style={{marginBottom:8,background:C.card,borderRadius:12,padding:"7px 12px",border:`1px solid ${C.border}`}}>
+            <div style={{display:"flex",justifyContent:"space-between",marginBottom:3}}>
+              <span style={{fontSize:11,color:C.sec}}>{fmt(incomeActual)} / {fmt(incomeBgt)}</span>
+              <span style={{fontSize:11,fontWeight:700,color:incomeActual>=incomeBgt?C.green:C.muted}}>{Math.round(incomeActual/incomeBgt*100)}%</span>
             </div>
-            {editing==="__income"
-              ?<div style={{display:"flex",gap:6,alignItems:"center"}}>
-                <input autoFocus value={editVal} onChange={e=>setEditVal(e.target.value)} onBlur={()=>save("__income")} onKeyDown={e=>e.key==="Enter"&&save("__income")}
-                  style={{width:90,fontSize:15,fontWeight:700,textAlign:"right",border:"none",background:C.card2,borderRadius:10,padding:"6px 10px",color:C.text}}/>
-                <span style={{fontSize:11,color:C.muted}}>$</span>
-              </div>
-              :<span className="tap" onClick={()=>{setEditing("__income");setEditVal(incomeBgt>0?String(incomeBgt):"");}}
-                style={{fontSize:14,fontWeight:700,color:incomeBgt>0?C.green:C.muted,background:incomeBgt===0?C.card2:"transparent",padding:incomeBgt===0?"6px 12px":"0",borderRadius:10}}>
-                {incomeBgt>0?fmt(incomeBgt):"Définir"}
-              </span>
-            }
-          </div>
-          {incomeBgt>0&&(
-            <div style={{marginTop:10}}>
-              <div style={{height:4,background:C.border2,borderRadius:2}}><div style={{width:`${Math.min(incomeActual/incomeBgt*100,100)}%`,height:"100%",background:C.green,borderRadius:2}}/></div>
-              <p style={{fontSize:10,color:C.muted,margin:"3px 0 0"}}>{Math.round(incomeActual/incomeBgt*100)}% reçu</p>
+            <div style={{height:4,background:C.border2,borderRadius:2}}><div style={{width:`${Math.min(incomeActual/incomeBgt*100,100)}%`,height:"100%",background:C.green,borderRadius:2}}/></div>
+          </div>}
+          {hierSection(incCats,byinc,C.green)}
+        </div>
+
+        {/* ── DÉPENSES ── */}
+        <div>
+          <p style={{fontSize:11,fontWeight:700,color:C.red,textTransform:"uppercase",letterSpacing:".07em",margin:"0 0 8px",paddingLeft:2}}>Dépenses</p>
+          {hierSection(expCats,bycat,C.green)}
+        </div>
+
+        {/* ── ÉPARGNE ── */}
+        <div>
+          {globalTargetRow("__epargne","Épargne",savingsActual,epagneBgt,C.accent)}
+          {epagneBgt>0&&<div style={{marginBottom:8,background:C.card,borderRadius:12,padding:"7px 12px",border:`1px solid ${C.border}`}}>
+            <div style={{display:"flex",justifyContent:"space-between",marginBottom:3}}>
+              <span style={{fontSize:11,color:C.sec}}>{fmt(savingsActual)} / {fmt(epagneBgt)}</span>
+              <span style={{fontSize:11,fontWeight:700,color:savingsActual>=epagneBgt?C.accent:C.muted}}>{Math.round(savingsActual/epagneBgt*100)}%</span>
             </div>
-          )}
-        </Card>
-        <p style={{fontSize:11,color:C.muted,paddingLeft:4}}>Touche un montant pour le modifier</p>
-        {/* Expense budgets — grouped by parent category */}
-        {(()=>{
-          const parents=expCats.filter(c=>!c.parentId);
-          const rows=[];
-          parents.forEach((par,pi)=>{
-            const subs=expCats.filter(c=>c.parentId===par.id);
-            // aggregate spent/budget for parent = sum of sub-cats (or direct parent txns)
+            <div style={{height:4,background:C.border2,borderRadius:2}}><div style={{width:`${Math.min(savingsActual/epagneBgt*100,100)}%`,height:"100%",background:C.accent,borderRadius:2}}/></div>
+          </div>}
+          {hierSection(savCats,bysav,C.accent)}
+        </div>
+
+        <div style={{height:8}}/>
+      </div>
+    </div>
+  );
+}
+
+// ── RÉPARTITION VIEW ──────────────────────────────────────────────────
+function RepartitionView({txns,cats,budgets}){
+  const now=new Date();
+  const [year,setYear]=useState(now.getFullYear());
+  const [month,setMonth]=useState(now.getMonth());
+  const mk=`${year}-${String(month+1).padStart(2,"0")}`;
+  const mt=txns.filter(t=>t.date?.startsWith(mk));
+  const [rCollapsed,setRCollapsed]=useState({});
+  function rToggle(id){setRCollapsed(p=>({...p,[id]:!p[id]}));}
+  const byAll={};mt.forEach(t=>{byAll[t.category]=(byAll[t.category]||0)+t.amount;});
+  const incTotal=mt.filter(t=>t.type==="income").reduce((s,t)=>s+t.amount,0);
+  const expTotal=mt.filter(t=>t.type==="expense").reduce((s,t)=>s+t.amount,0);
+  const savTotal=mt.filter(t=>t.type==="epargne").reduce((s,t)=>s+t.amount,0);
+  const flux=incTotal-expTotal-savTotal;
+
+  function section(typeId,typeCats,color,title,sectionTotal){
+    const parents=typeCats.filter(c=>!c.parentId);
+    if(parents.length===0&&sectionTotal===0)return null;
+    return(
+      <div>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:7,paddingLeft:2}}>
+          <p style={{fontSize:11,fontWeight:700,color,textTransform:"uppercase",letterSpacing:".07em",margin:0}}>{title}</p>
+          <p style={{fontSize:14,fontWeight:800,color,margin:0,letterSpacing:"-0.5px"}}>{fmt(sectionTotal)}</p>
+        </div>
+        <Card>
+          {parents.map((par,pi)=>{
+            const subs=typeCats.filter(c=>c.parentId===par.id);
             const allIds=[par.id,...subs.map(s=>s.id)];
-            const parSpent=allIds.reduce((s,id)=>s+(bycat[id]||0),0);
-            const parBgt=allIds.reduce((s,id)=>s+(+(budgets[id]||0)),0);
-            const parPct=parBgt>0?Math.min(parSpent/parBgt*100,100):0;
-            const parCol=parPct>=100?C.red:parPct>=80?C.orange:C.green;
-            const isLastEntry=pi===parents.length-1&&subs.length===0;
-            rows.push(
-              <div key={par.id} style={{padding:"12px 16px",borderBottom:(!isLastEntry)?`1px solid ${C.border}`:"none",background:"transparent"}}>
-                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:parBgt>0?8:0}}>
-                  <div style={{display:"flex",alignItems:"center",gap:10}}>
-                    <CatIconBadge cat={par} size={34}/>
-                    <div>
-                      <p style={{fontSize:13,fontWeight:700,margin:0,color:C.text}}>{par.label}</p>
-                      <p style={{fontSize:10,margin:0,color:C.muted}}>{parBgt>0?`${fmt(parSpent)} / ${fmt(parBgt)}`:"Aucun budget"}</p>
+            const parAmt=allIds.reduce((s,id)=>s+(byAll[id]||0),0);
+            const parBgt=budgets?allIds.reduce((s,id)=>s+(+(budgets[id]||0)),0):0;
+            const sharePct=sectionTotal>0?parAmt/sectionTotal*100:0;
+            const bgtPct=parBgt>0?Math.min(parAmt/parBgt*100,100):0;
+            const bgtCol=parBgt>0&&parAmt>parBgt?C.red:color;
+            const hasSubs=subs.length>0;
+            const isLast=pi===parents.length-1;
+            const open=!rCollapsed[par.id];
+            return(
+              <React.Fragment key={par.id}>
+                <div style={{padding:"11px 14px",borderBottom:(hasSubs&&open)||!isLast?`1px solid ${C.border}`:"none"}}>
+                  <div style={{display:"flex",alignItems:"center",gap:9,marginBottom:parAmt>0?8:0}}>
+                    <div className="tap" onClick={()=>hasSubs&&rToggle(par.id)}
+                      style={{width:20,height:20,borderRadius:5,background:hasSubs?C.card2:"transparent",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,cursor:hasSubs?"pointer":"default"}}>
+                      {hasSubs&&<svg width="10" height="10" viewBox="0 0 12 12" fill="none"><path d={open?"M2 4l4 4 4-4":"M4 2l4 4-4 4"} stroke={C.muted} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/></svg>}
+                    </div>
+                    <CatIconBadge cat={par} size={32}/>
+                    <div style={{flex:1,minWidth:0}}>
+                      <p style={{fontSize:13,fontWeight:600,margin:0,color:C.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{par.label}</p>
+                    </div>
+                    <div style={{textAlign:"right",flexShrink:0}}>
+                      <p style={{fontSize:13,fontWeight:700,margin:0,color:parAmt>0?color:C.muted}}>{parAmt>0?fmt(parAmt):"—"}</p>
+                      {parBgt>0&&<p style={{fontSize:9,color:C.muted,margin:0}}>/{fmt(parBgt)}</p>}
                     </div>
                   </div>
-                  {editing===par.id
-                    ?<div style={{display:"flex",gap:6,alignItems:"center"}}>
-                      <input autoFocus value={editVal} onChange={e=>setEditVal(e.target.value)} onBlur={()=>save(par.id)} onKeyDown={e=>e.key==="Enter"&&save(par.id)}
-                        style={{width:85,fontSize:14,fontWeight:700,textAlign:"right",border:"none",background:C.card2,borderRadius:10,padding:"6px 9px",color:C.text}}/>
-                      <span style={{fontSize:11,color:C.muted}}>$</span>
-                    </div>
-                    :<span className="tap" onClick={()=>{setEditing(par.id);setEditVal(+(budgets[par.id]||0)>0?String(budgets[par.id]):"");}}
-                      style={{fontSize:14,fontWeight:700,color:parBgt>0?C.text:C.muted,background:parBgt===0?C.card2:"transparent",padding:parBgt===0?"5px 11px":"0",borderRadius:10}}>
-                      {parBgt>0?fmt(parBgt):"Définir"}
-                    </span>
-                  }
-                </div>
-                {parBgt>0&&(
-                  <>
-                    <div style={{height:4,background:C.border2,borderRadius:2}}><div style={{width:`${parPct}%`,height:"100%",background:parCol,borderRadius:2,transition:"width .4s"}}/></div>
-                    <div style={{display:"flex",justifyContent:"space-between",marginTop:4}}>
-                      <span style={{fontSize:10,color:C.muted}}>{Math.round(parPct)}%</span>
-                      <span style={{fontSize:10,color:parPct>=100?C.red:parPct>=80?C.orange:C.muted}}>{parPct>=100?"Dépassé de "+fmt(parSpent-parBgt):"Reste "+fmt(parBgt-parSpent)}</span>
-                    </div>
-                  </>
-                )}
-              </div>
-            );
-            // sub-category rows
-            subs.forEach((sub,si)=>{
-              const bgt=+(budgets[sub.id]||0);const spent=bycat[sub.id]||0;
-              const pct=bgt>0?Math.min(spent/bgt*100,100):0;
-              const col=pct>=100?C.red:pct>=80?C.orange:C.green;
-              const isLast=pi===parents.length-1&&si===subs.length-1;
-              rows.push(
-                <div key={sub.id} style={{padding:"10px 16px 10px 28px",borderBottom:!isLast?`1px solid ${C.border}`:"none",background:"rgba(255,255,255,.018)"}}>
-                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:bgt>0?7:0}}>
-                    <div style={{display:"flex",alignItems:"center",gap:8}}>
-                      <div style={{width:10,height:10,borderLeft:`2px solid ${C.border2}`,borderBottom:`2px solid ${C.border2}`,borderRadius:"0 0 0 3px",flexShrink:0,marginRight:2}}/>
-                      <CatIconBadge cat={sub} size={28}/>
-                      <div>
-                        <p style={{fontSize:12,fontWeight:500,margin:0,color:C.sec}}>{sub.label}</p>
-                        <p style={{fontSize:10,margin:0,color:C.muted}}>{bgt>0?`${fmt(spent)} / ${fmt(bgt)}`:"—"}</p>
+                  {parAmt>0&&(
+                    <div style={{marginLeft:29,display:"flex",flexDirection:"column",gap:3}}>
+                      <div style={{display:"flex",alignItems:"center",gap:6}}>
+                        <div style={{flex:1,height:3,background:C.border2,borderRadius:2}}>
+                          <div style={{width:`${sharePct}%`,maxWidth:"100%",height:"100%",background:color+"88",borderRadius:2}}/>
+                        </div>
+                        <span style={{fontSize:9,color:C.muted,flexShrink:0,minWidth:28,textAlign:"right"}}>{Math.round(sharePct)}%</span>
                       </div>
-                    </div>
-                    {editing===sub.id
-                      ?<div style={{display:"flex",gap:6,alignItems:"center"}}>
-                        <input autoFocus value={editVal} onChange={e=>setEditVal(e.target.value)} onBlur={()=>save(sub.id)} onKeyDown={e=>e.key==="Enter"&&save(sub.id)}
-                          style={{width:78,fontSize:13,fontWeight:700,textAlign:"right",border:"none",background:C.card2,borderRadius:10,padding:"5px 8px",color:C.text}}/>
-                        <span style={{fontSize:11,color:C.muted}}>$</span>
-                      </div>
-                      :<span className="tap" onClick={()=>{setEditing(sub.id);setEditVal(bgt>0?String(bgt):"");}}
-                        style={{fontSize:13,fontWeight:700,color:bgt>0?C.text:C.muted,background:bgt===0?C.card2:"transparent",padding:bgt===0?"4px 9px":"0",borderRadius:10}}>
-                        {bgt>0?fmt(bgt):"Définir"}
-                      </span>
-                    }
-                  </div>
-                  {bgt>0&&(
-                    <div style={{paddingLeft:22}}>
-                      <div style={{height:3,background:C.border2,borderRadius:2}}><div style={{width:`${pct}%`,height:"100%",background:col,borderRadius:2,transition:"width .4s"}}/></div>
-                      <div style={{display:"flex",justifyContent:"space-between",marginTop:3}}>
-                        <span style={{fontSize:9,color:C.muted}}>{Math.round(pct)}%</span>
-                        <span style={{fontSize:9,color:pct>=100?C.red:pct>=80?C.orange:C.muted}}>{pct>=100?"Dépassé de "+fmt(spent-bgt):"Reste "+fmt(bgt-spent)}</span>
-                      </div>
+                      {parBgt>0&&<div style={{display:"flex",alignItems:"center",gap:6}}>
+                        <div style={{flex:1,height:3,background:C.border2,borderRadius:2}}>
+                          <div style={{width:`${bgtPct}%`,height:"100%",background:bgtCol,borderRadius:2,transition:"width .3s"}}/>
+                        </div>
+                        <span style={{fontSize:9,color:bgtCol,flexShrink:0,minWidth:28,textAlign:"right"}}>{Math.round(bgtPct)}%</span>
+                      </div>}
                     </div>
                   )}
                 </div>
-              );
-            });
-          });
-          return <Card>{rows}</Card>;
-        })()}
-        {/* Épargne objectif mensuel */}
-        <Card style={{padding:"13px 16px"}}>
-          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-            <div style={{display:"flex",alignItems:"center",gap:10}}>
-              <CatIconBadge cat={{id:"epargne",color:C.accent,icon:"piggy"}} size={34}/>
-              <div>
-                <p style={{fontSize:14,fontWeight:600,margin:0,color:C.text}}>Épargne mensuelle visée</p>
-                <p style={{fontSize:11,margin:0,color:epagneBgt>0&&savingsActual>=epagneBgt?C.accent:C.muted}}>
-                  {epagneBgt>0?`${fmt(savingsActual)} épargné / ${fmt(epagneBgt)} visé`:"Pas d'objectif défini"}
-                </p>
-              </div>
-            </div>
-            {editing==="__epargne"
-              ?<div style={{display:"flex",gap:6,alignItems:"center"}}>
-                <input autoFocus value={editVal} onChange={e=>setEditVal(e.target.value)} onBlur={()=>save("__epargne")} onKeyDown={e=>e.key==="Enter"&&save("__epargne")}
-                  style={{width:90,fontSize:15,fontWeight:700,textAlign:"right",border:"none",background:C.card2,borderRadius:10,padding:"6px 10px",color:C.text}}/>
-                <span style={{fontSize:11,color:C.muted}}>$</span>
-              </div>
-              :<span className="tap" onClick={()=>{setEditing("__epargne");setEditVal(epagneBgt>0?String(epagneBgt):"");}}
-                style={{fontSize:14,fontWeight:700,color:epagneBgt>0?C.accent:C.muted,background:epagneBgt===0?C.card2:"transparent",padding:epagneBgt===0?"6px 12px":"0",borderRadius:10}}>
-                {epagneBgt>0?fmt(epagneBgt):"Définir"}
-              </span>
-            }
-          </div>
-          {epagneBgt>0&&(
-            <div style={{marginTop:10}}>
-              <div style={{height:4,background:C.border2,borderRadius:2}}><div style={{width:`${Math.min(savingsActual/epagneBgt*100,100)}%`,height:"100%",background:C.accent,borderRadius:2}}/></div>
-              <p style={{fontSize:10,color:C.muted,margin:"3px 0 0"}}>{Math.round(savingsActual/epagneBgt*100)}% atteint</p>
-            </div>
-          )}
-        </Card>
-        {/* Épargne par catégorie — avec sous-catégories */}
-        {savCats.length>0&&(()=>{
-          const savParents=savCats.filter(c=>!c.parentId);
-          const rows=[];
-          savParents.forEach((par,pi)=>{
-            const subs=savCats.filter(c=>c.parentId===par.id);
-            const allIds=[par.id,...subs.map(s=>s.id)];
-            const parSav=allIds.reduce((s,id)=>s+(bysav[id]||0),0);
-            const parBgt=allIds.reduce((s,id)=>s+(+(budgets[id]||0)),0);
-            const parPct=parBgt>0?Math.min(parSav/parBgt*100,100):0;
-            const isLastEntry=pi===savParents.length-1&&subs.length===0;
-            rows.push(
-              <div key={par.id} style={{padding:"12px 16px",borderBottom:!isLastEntry?`1px solid ${C.border}`:"none"}}>
-                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:parBgt>0?8:0}}>
-                  <div style={{display:"flex",alignItems:"center",gap:10}}>
-                    <CatIconBadge cat={par} size={34}/>
-                    <div>
-                      <p style={{fontSize:13,fontWeight:700,margin:0,color:C.text}}>{par.label}</p>
-                      <p style={{fontSize:10,margin:0,color:C.muted}}>{parBgt>0?`${fmt(parSav)} / ${fmt(parBgt)}`:"Aucun objectif"}</p>
+                {open&&hasSubs&&subs.map((sub,si)=>{
+                  const subAmt=byAll[sub.id]||0;
+                  const subBgt=budgets?+(budgets[sub.id]||0):0;
+                  const subShare=parAmt>0?subAmt/parAmt*100:0;
+                  const subBgtPct=subBgt>0?Math.min(subAmt/subBgt*100,100):0;
+                  return(
+                    <div key={sub.id} style={{padding:"8px 14px 8px 34px",borderBottom:(si<subs.length-1||!isLast)?`1px solid ${C.border}`:"none",background:"rgba(255,255,255,.02)"}}>
+                      <div style={{display:"flex",alignItems:"center",gap:8}}>
+                        <div style={{width:10,height:10,borderLeft:`2px solid ${C.border2}`,borderBottom:`2px solid ${C.border2}`,borderRadius:"0 0 0 3px",flexShrink:0,marginRight:2}}/>
+                        <CatIconBadge cat={sub} size={24}/>
+                        <div style={{flex:1,minWidth:0}}>
+                          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:subAmt>0?4:0}}>
+                            <p style={{fontSize:12,fontWeight:500,margin:0,color:C.sec,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{sub.label}</p>
+                            <div style={{textAlign:"right",flexShrink:0,marginLeft:6}}>
+                              <p style={{fontSize:12,fontWeight:700,margin:0,color:subAmt>0?color:C.muted}}>{subAmt>0?fmt(subAmt):"—"}</p>
+                              {subBgt>0&&<p style={{fontSize:9,color:C.muted,margin:0}}>/{fmt(subBgt)}</p>}
+                            </div>
+                          </div>
+                          {subAmt>0&&subBgt>0&&<div style={{height:3,background:C.border2,borderRadius:2}}><div style={{width:`${subBgtPct}%`,height:"100%",background:subBgt>0&&subAmt>subBgt?C.red:color,borderRadius:2}}/></div>}
+                        </div>
+                      </div>
                     </div>
-                  </div>
-                  {editing===par.id
-                    ?<div style={{display:"flex",gap:6,alignItems:"center"}}>
-                      <input autoFocus value={editVal} onChange={e=>setEditVal(e.target.value)} onBlur={()=>save(par.id)} onKeyDown={e=>e.key==="Enter"&&save(par.id)}
-                        style={{width:85,fontSize:14,fontWeight:700,textAlign:"right",border:"none",background:C.card2,borderRadius:10,padding:"6px 9px",color:C.text}}/>
-                      <span style={{fontSize:11,color:C.muted}}>$</span>
-                    </div>
-                    :<span className="tap" onClick={()=>{setEditing(par.id);setEditVal(+(budgets[par.id]||0)>0?String(budgets[par.id]):"");}}
-                      style={{fontSize:14,fontWeight:700,color:parBgt>0?C.accent:C.muted,background:parBgt===0?C.card2:"transparent",padding:parBgt===0?"5px 11px":"0",borderRadius:10}}>
-                      {parBgt>0?fmt(parBgt):"Définir"}
-                    </span>
-                  }
-                </div>
-                {parBgt>0&&(
-                  <>
-                    <div style={{height:4,background:C.border2,borderRadius:2}}><div style={{width:`${parPct}%`,height:"100%",background:C.accent,borderRadius:2,transition:"width .4s"}}/></div>
-                    <div style={{display:"flex",justifyContent:"space-between",marginTop:4}}>
-                      <span style={{fontSize:10,color:C.muted}}>{Math.round(parPct)}%</span>
-                      <span style={{fontSize:10,color:parPct>=100?C.accent:C.muted}}>{parPct>=100?"Objectif atteint !":"Reste "+fmt(parBgt-parSav)}</span>
-                    </div>
-                  </>
-                )}
-              </div>
+                  );
+                })}
+              </React.Fragment>
             );
-            subs.forEach((sub,si)=>{
-              const bgt=+(budgets[sub.id]||0);const sav=bysav[sub.id]||0;
-              const pct=bgt>0?Math.min(sav/bgt*100,100):0;
-              const isLast=pi===savParents.length-1&&si===subs.length-1;
-              rows.push(
-                <div key={sub.id} style={{padding:"10px 16px 10px 28px",borderBottom:!isLast?`1px solid ${C.border}`:"none",background:"rgba(255,255,255,.018)"}}>
-                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:bgt>0?7:0}}>
-                    <div style={{display:"flex",alignItems:"center",gap:8}}>
-                      <div style={{width:10,height:10,borderLeft:`2px solid ${C.border2}`,borderBottom:`2px solid ${C.border2}`,borderRadius:"0 0 0 3px",flexShrink:0,marginRight:2}}/>
-                      <CatIconBadge cat={sub} size={28}/>
-                      <div>
-                        <p style={{fontSize:12,fontWeight:500,margin:0,color:C.sec}}>{sub.label}</p>
-                        <p style={{fontSize:10,margin:0,color:C.muted}}>{bgt>0?`${fmt(sav)} / ${fmt(bgt)}`:"—"}</p>
-                      </div>
-                    </div>
-                    {editing===sub.id
-                      ?<div style={{display:"flex",gap:6,alignItems:"center"}}>
-                        <input autoFocus value={editVal} onChange={e=>setEditVal(e.target.value)} onBlur={()=>save(sub.id)} onKeyDown={e=>e.key==="Enter"&&save(sub.id)}
-                          style={{width:78,fontSize:13,fontWeight:700,textAlign:"right",border:"none",background:C.card2,borderRadius:10,padding:"5px 8px",color:C.text}}/>
-                        <span style={{fontSize:11,color:C.muted}}>$</span>
-                      </div>
-                      :<span className="tap" onClick={()=>{setEditing(sub.id);setEditVal(bgt>0?String(bgt):"");}}
-                        style={{fontSize:13,fontWeight:700,color:bgt>0?C.accent:C.muted,background:bgt===0?C.card2:"transparent",padding:bgt===0?"4px 9px":"0",borderRadius:10}}>
-                        {bgt>0?fmt(bgt):"Définir"}
-                      </span>
-                    }
-                  </div>
-                  {bgt>0&&(
-                    <div style={{paddingLeft:22}}>
-                      <div style={{height:3,background:C.border2,borderRadius:2}}><div style={{width:`${pct}%`,height:"100%",background:C.accent,borderRadius:2,transition:"width .4s"}}/></div>
-                      <div style={{display:"flex",justifyContent:"space-between",marginTop:3}}>
-                        <span style={{fontSize:9,color:C.muted}}>{Math.round(pct)}%</span>
-                        <span style={{fontSize:9,color:pct>=100?C.accent:C.muted}}>{pct>=100?"Atteint !":"Reste "+fmt(bgt-sav)}</span>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              );
-            });
-          });
-          return <Card>{rows}</Card>;
-        })()}
+          })}
+        </Card>
+      </div>
+    );
+  }
+
+  return(
+    <div className="scroll">
+      <div style={{padding:"12px 14px 0"}}>
+        <MonthNav year={year} month={month} onChange={(y,m)=>{setYear(y);setMonth(m);}}/>
+      </div>
+      <div style={{padding:"12px 14px",display:"flex",flexDirection:"column",gap:12}}>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:6}}>
+          {[{l:"Revenus",v:incTotal,c:C.green},{l:"Dépenses",v:expTotal,c:C.red},{l:"Épargne",v:savTotal,c:C.accent},{l:"Flux net",v:flux,c:flux>=0?C.green:C.red}].map(m=>(
+            <div key={m.l} style={{background:C.card,borderRadius:11,padding:"8px 6px",textAlign:"center",border:`1px solid ${C.border}`}}>
+              <p style={{fontSize:8,color:C.muted,margin:"0 0 2px",textTransform:"uppercase",letterSpacing:".04em"}}>{m.l}</p>
+              <p style={{fontSize:11,fontWeight:800,color:m.c,margin:0,letterSpacing:"-0.3px"}}>{fmt(m.v)}</p>
+            </div>
+          ))}
+        </div>
+        {section("income",cats.filter(c=>c.forTypes?.includes("income")),C.green,"Revenus",incTotal)}
+        {section("expense",cats.filter(c=>c.forTypes?.includes("expense")),C.red,"Dépenses",expTotal)}
+        {section("epargne",cats.filter(c=>c.forTypes?.includes("epargne")),C.accent,"Épargne",savTotal)}
         <div style={{height:8}}/>
       </div>
     </div>
@@ -1238,9 +1289,9 @@ function BudgetView({txns,cats,budgets,setBudgets}){
 }
 
 // ── STATS ───────────────────────────────────────────────────────────
-function StatsView({txns,cats,setCats,accounts,setAccounts,addMany,vnpHistory}){
+function StatsView({txns,cats,setCats,accounts,setAccounts,addMany,vnpHistory,budgets}){
   const [sub,setSub]=useState("charts");
-  const tabs=[{id:"charts",l:"Graphiques"},{id:"comptes",l:"Comptes"},{id:"cats",l:"Catégories"},{id:"scan",l:"Scanner IA"}];
+  const tabs=[{id:"charts",l:"Graphiques"},{id:"repartition",l:"Répartition"},{id:"comptes",l:"Comptes"},{id:"cats",l:"Catégories"},{id:"scan",l:"Scanner IA"}];
   return(
     <div style={{display:"flex",flexDirection:"column",flex:1,minHeight:0,overflow:"hidden"}}>
       <div style={{background:C.surf,borderBottom:`1px solid ${C.border}`,padding:"0 14px",flexShrink:0,display:"flex",overflowX:"auto"}}>
@@ -1251,10 +1302,11 @@ function StatsView({txns,cats,setCats,accounts,setAccounts,addMany,vnpHistory}){
         ))}
       </div>
       <div style={{flex:1,overflow:"hidden",display:"flex",flexDirection:"column"}}>
-        {sub==="charts" &&<ChartsView txns={txns} cats={cats} accounts={accounts} vnpHistory={vnpHistory}/>}
-        {sub==="comptes"&&<ComptesView accounts={accounts} setAccounts={setAccounts}/>}
-        {sub==="cats"   &&<CatsView cats={cats} setCats={setCats}/>}
-        {sub==="scan"   &&<ScanView addMany={addMany} accounts={accounts} cats={cats} txns={txns}/>}
+        {sub==="charts"      &&<ChartsView txns={txns} cats={cats} accounts={accounts} vnpHistory={vnpHistory}/>}
+        {sub==="repartition" &&<RepartitionView txns={txns} cats={cats} budgets={budgets}/>}
+        {sub==="comptes"     &&<ComptesView accounts={accounts} setAccounts={setAccounts}/>}
+        {sub==="cats"        &&<CatsView cats={cats} setCats={setCats}/>}
+        {sub==="scan"        &&<ScanView addMany={addMany} accounts={accounts} cats={cats} txns={txns}/>}
       </div>
     </div>
   );
@@ -1454,6 +1506,8 @@ function CatsView({cats,setCats}){
   const [editId,setEditId]=useState(null);
   const BLANK={label:"",icon:"dollar",color:COLORS[0],forTypes:["expense"],parentId:""};
   const [form,setForm]=useState(BLANK);
+  const [catCollapsed,setCatCollapsed]=useState({});
+  function toggleCat(id){setCatCollapsed(p=>({...p,[id]:!p[id]}));}
   const TYPE_OPTS=[{id:"expense",l:"Dépense"},{id:"income",l:"Revenu"},{id:"epargne",l:"Épargne"}];
   const ICO_KEYS=Object.keys(ILIB);
 
@@ -1563,21 +1617,27 @@ function CatsView({cats,setCats}){
           {[...parents,...orphans].map((par,pi,arr)=>{
             const subs=typeCats.filter(c=>c.parentId===par.id);
             const isLast=pi===arr.length-1;
+            const hasSubs=subs.length>0;
+            const open=!catCollapsed[par.id];
             return(
               <React.Fragment key={par.id}>
-                <div style={{display:"flex",alignItems:"center",gap:11,padding:"11px 14px",borderBottom:(!isLast||subs.length>0)?`1px solid ${C.border}`:"none"}}>
-                  <CatIconBadge cat={par} size={36}/>
+                <div style={{display:"flex",alignItems:"center",gap:9,padding:"11px 14px",borderBottom:(!isLast||hasSubs&&open)?`1px solid ${C.border}`:"none"}}>
+                  <div className="tap" onClick={()=>hasSubs&&toggleCat(par.id)}
+                    style={{width:22,height:22,borderRadius:6,background:hasSubs?C.card2:"transparent",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,cursor:hasSubs?"pointer":"default"}}>
+                    {hasSubs&&<svg width="11" height="11" viewBox="0 0 12 12" fill="none"><path d={open?"M2 4l4 4 4-4":"M4 2l4 4-4 4"} stroke={C.muted} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/></svg>}
+                  </div>
+                  <CatIconBadge cat={par} size={34}/>
                   <div style={{flex:1,minWidth:0}}>
                     <p style={{fontSize:14,margin:0,color:C.text,fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{par.label}</p>
-                    {subs.length>0&&<p style={{fontSize:10,color:C.muted,margin:"2px 0 0"}}>{subs.length} sous-cat.</p>}
+                    {hasSubs&&<p style={{fontSize:9,color:C.muted,margin:"2px 0 0"}}>{subs.length} sous-cat. · {open?"réduire":"développer"}</p>}
                   </div>
                   <div className="tap" onClick={()=>startEdit(par)} style={{padding:"5px 10px",borderRadius:8,background:C.accentL,color:C.accent,fontSize:11,fontWeight:600,marginRight:4,flexShrink:0}}>Modifier</div>
                   {!par.isDefault&&<div className="tap" onClick={()=>delCat(par.id)} style={{padding:"5px 8px",borderRadius:8,background:C.redL,color:C.red,fontSize:12,fontWeight:700,flexShrink:0}}>✕</div>}
                 </div>
-                {subs.map((sub,si)=>(
-                  <div key={sub.id} style={{display:"flex",alignItems:"center",gap:10,padding:"9px 14px 9px 30px",borderBottom:(si<subs.length-1||!isLast)?`1px solid ${C.border}`:"none",background:"rgba(255,255,255,.02)"}}>
+                {open&&hasSubs&&subs.map((sub,si)=>(
+                  <div key={sub.id} style={{display:"flex",alignItems:"center",gap:10,padding:"9px 14px 9px 36px",borderBottom:(si<subs.length-1||!isLast)?`1px solid ${C.border}`:"none",background:"rgba(255,255,255,.02)"}}>
                     <div style={{width:12,height:12,borderLeft:`2px solid ${C.border2}`,borderBottom:`2px solid ${C.border2}`,borderRadius:"0 0 0 4px",flexShrink:0,marginRight:2}}/>
-                    <CatIconBadge cat={sub} size={28}/>
+                    <CatIconBadge cat={sub} size={26}/>
                     <div style={{flex:1,minWidth:0}}>
                       <p style={{fontSize:13,margin:0,color:C.sec,fontWeight:500,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{sub.label}</p>
                     </div>
@@ -1918,7 +1978,7 @@ function App(){
         {tab==="activity" &&<Activity txns={txns} cats={cats} accounts={accounts} deleteTxn={deleteTxn} editTxn={editTxn}/>}
         {tab==="add"      &&<AddTxn addMany={addMany} accounts={accounts} cats={cats} onDone={()=>setTab("home")}/>}
         {tab==="budget"   &&<BudgetView txns={txns} cats={cats} budgets={budgets} setBudgets={setBudgets}/>}
-        {tab==="stats"    &&<StatsView txns={txns} cats={cats} setCats={setCats} accounts={accounts} setAccounts={setAccounts} addMany={addMany} vnpHistory={vnpHistory}/>}
+        {tab==="stats"    &&<StatsView txns={txns} cats={cats} setCats={setCats} accounts={accounts} setAccounts={setAccounts} addMany={addMany} vnpHistory={vnpHistory} budgets={budgets}/>}
         <BottomNav tab={tab} setTab={setTab}/>
       </div>
     </div>
