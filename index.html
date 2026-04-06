@@ -50,10 +50,10 @@ input[type=number]::-webkit-inner-spin-button{display:none}
 }
 @media(min-width:1100px){
   body{align-items:stretch;padding:20px;gap:0;justify-content:center}
-  #root{width:min(96vw,1160px);height:calc(100vh - 40px);border-radius:24px;display:grid;grid-template-columns:220px 1fr;grid-template-rows:1fr;overflow:hidden}
+  #root{width:min(96vw,1160px);height:calc(100vh - 40px);border-radius:24px;overflow:hidden;display:flex;flex-direction:row}
   .scroll{padding-bottom:24px!important}
   .bnav{display:none!important}
-  .snav{display:flex!important}
+  .snav{display:flex!important;width:220px;min-width:220px;flex-shrink:0}
 }
 </style>
 </head>
@@ -91,23 +91,118 @@ const BANKS=[
 ];
 const bankById=id=>BANKS.find(b=>b.id===id)||BANKS[BANKS.length-1];
 
-// ── DEFAULT CATS ─────────────────────────────────────────────────────
+// ── SVG ICON LIBRARY ────────────────────────────────────────────────
+// Each value is a string of space-separated SVG path "d" attributes (stroke-based, 24x24)
+const ILIB={
+  home:     "M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z|M9 22V12h6v10",
+  dollar:   "M12 1v22|M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6",
+  briefcase:"M20 7H4a2 2 0 00-2 2v10a2 2 0 002 2h16a2 2 0 002-2V9a2 2 0 00-2-2z|M16 7V5a2 2 0 00-2-2h-4a2 2 0 00-2 2v2",
+  truck:    "M1 3h15v13H1z|M16 8h4l3 3v5h-7V8z|M5.5 21a2.5 2.5 0 100-5 2.5 2.5 0 000 5z|M18.5 21a2.5 2.5 0 100-5 2.5 2.5 0 000 5z",
+  trending: "M23 6l-9.5 9.5-5-5L1 18|M17 6h6v6",
+  bolt:     "M13 2L3 14h9l-1 8 10-12h-9l1-8z",
+  shield:   "M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z",
+  cart:     "M9 22a1 1 0 100-2 1 1 0 000 2z|M20 22a1 1 0 100-2 1 1 0 000 2z|M1 1h4l2.68 13.39a2 2 0 001.95 1.61h9.72a2 2 0 001.95-1.57L23 6H6",
+  fork:     "M3 2v7c0 1.1.9 2 2 2h4a2 2 0 002-2V2|M7 2v20|M21 15V2a5 5 0 00-5 5v6c0 1.1.9 2 2 2h3z",
+  car:      "M5 17H3a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v9a2 2 0 01-2 2h-2|M14 17H9|M7 19a2 2 0 100-4 2 2 0 000 4z|M17 19a2 2 0 100-4 2 2 0 000 4z",
+  wrench:   "M14.7 6.3a1 1 0 000 1.4l1.6 1.6a1 1 0 001.4 0l3.77-3.77a6 6 0 01-7.94 7.94l-6.91 6.91a2.12 2.12 0 01-3-3l6.91-6.91a6 6 0 017.94-7.94l-3.76 3.76z",
+  card:     "M1 4h22v16H1z|M1 10h22",
+  heart:    "M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 000-7.78z",
+  book:     "M4 19.5A2.5 2.5 0 016.5 17H20|M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z",
+  bank:     "M3 22h18|M3 10h18|M5 10V22|M19 10V22|M12 2L2 10h20z",
+  wifi:     "M5 12.55a11 11 0 0114.08 0|M1.42 9a16 16 0 0121.16 0|M8.53 16.11a6 6 0 016.95 0|M12 20h.01",
+  phone:    "M5 2h14a2 2 0 012 2v16a2 2 0 01-2 2H5a2 2 0 01-2-2V4a2 2 0 012-2z|M12 18h.01",
+  tv:       "M21 3H3a2 2 0 00-2 2v12a2 2 0 002 2h18a2 2 0 002-2V5a2 2 0 00-2-2z|M8 21h8|M12 17v4",
+  music:    "M9 18V5l12-2v13|M6 21a3 3 0 100-6 3 3 0 000 6z|M18 19a3 3 0 100-6 3 3 0 000 6z",
+  plane:    "M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 002 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z|M3.27 6.96L12 12.01l8.73-5.05|M12 22.08V12",
+  sun:      "M12 2v2|M12 20v2|M4.22 4.22l1.42 1.42|M18.36 18.36l1.42 1.42|M2 12h2|M20 12h2|M4.22 19.78l1.42-1.42|M18.36 5.64l1.42-1.42|M12 7a5 5 0 100 10 5 5 0 000-10z",
+  key:      "M21 2l-2 2m-7.61 7.61a5.5 5.5 0 11-7.778 7.778 5.5 5.5 0 017.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4",
+  target:   "M22 12a10 10 0 1 1-20 0 10 10 0 0 1 20 0z|M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0z",
+  paw:      "M11 5.5a2 2 0 11-4 0 2 2 0 014 0z|M19 5.5a2 2 0 11-4 0 2 2 0 014 0z|M8 11.5a2 2 0 11-4 0 2 2 0 014 0z|M20 11.5a2 2 0 11-4 0 2 2 0 014 0z|M12 20c-2.8 0-5-2-5-5s2.2-5 5-5 5 2 5 5-2.2 5-5 5z",
+  bus:      "M8 6h8|M2 11h20|M18 3H6a2 2 0 00-2 2v13|M20 5a2 2 0 012 2|M7 18a2 2 0 100-4 2 2 0 000 4z|M17 18a2 2 0 100-4 2 2 0 000 4z",
+  pill:     "M4.5 9.5l9-9 5 5-9 9-5-5z|M14.5 4.5l5 5|M3 13l8 8",
+  gift:     "M20 12v10H4V12|M22 7H2v5h20V7z|M12 22V7|M12 7H7.5a2.5 2.5 0 010-5C11 2 12 7 12 7z|M12 7h4.5a2.5 2.5 0 000-5C13 2 12 7 12 7z",
+  piggy:    "M12 2a7 7 0 00-7 7v1H3l1 3h1l.5 2H8v2h8v-2h2.5L19 13h1l1-3h-2V9a7 7 0 00-7-7z|M9.5 9h.01|M14.5 9h.01",
+  repeat:   "M17 1l4 4-4 4|M3 11V9a4 4 0 014-4h14|M7 23l-4-4 4-4|M21 13v2a4 4 0 01-4 4H3",
+  gas:      "M3 22V3h10v19|M3 11h10|M17 5h2a2 2 0 012 2v10a1 1 0 001 1 1 1 0 001-1V9l-3-4",
+  tooth:    "M12 2C9.5 2 7.5 4 7.5 6s2.5 3 4.5 3 4.5-1 4.5-3S14.5 2 12 2z|M7.5 6c-1 4-1.5 8 0 12 1 3 4 3 4.5 0 .5 3 3.5 3 4.5 0 1.5-4 1-8 0-12",
+  pencil:   "M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7|M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z",
+  trash:    "M3 6h18|M8 6V4h8v2|M19 6l-1 14H6L5 6",
+  check:    "M20 6L9 17l-5-5",
+  plus:     "M12 5v14|M5 12h14",
+  x:        "M18 6L6 18|M6 6l12 12",
+};
+function IcoSVG({name,size=20,color="white"}){
+  const d=ILIB[name];if(!d)return null;
+  const paths=d.split("|");
+  const sw=(size/20)*1.8;
+  return(
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      {paths.map((p,i)=><path key={i} d={p} stroke={color} strokeWidth={sw} strokeLinecap="round" strokeLinejoin="round" fill="none"/>)}
+    </svg>
+  );
+}
+
+// ── DEFAULT CATS (with sub-categories via parentId) ───────────────────
 const DEFAULT_CATS=[
-  {id:"revenus",    label:"Revenus",          color:"#10B981",forTypes:["income"],        isDefault:true, icon:"💰"},
-  {id:"salaire",    label:"Salaire",          color:"#34D399",forTypes:["income"],        isDefault:true, icon:"💼"},
-  {id:"livraison",  label:"Livraison",        color:"#06B6D4",forTypes:["income"],        isDefault:true, icon:"🛵"},
-  {id:"habitation", label:"Habitation",       color:"#7C3AED",forTypes:["expense"],       isDefault:true, icon:"🏠"},
-  {id:"alim",       label:"Alimentation",     color:"#F59E0B",forTypes:["expense"],       isDefault:true, icon:"🍽"},
-  {id:"transport",  label:"Transport",        color:"#3B82F6",forTypes:["expense"],       isDefault:true, icon:"🚗"},
-  {id:"sante",      label:"Soins & santé",    color:"#F43F5E",forTypes:["expense"],       isDefault:true, icon:"❤️"},
-  {id:"formation",  label:"Formation",        color:"#8B5CF6",forTypes:["expense"],       isDefault:true, icon:"📚"},
-  {id:"financiers", label:"Frais financiers", color:"#06B6D4",forTypes:["expense"],       isDefault:true, icon:"💳"},
-  {id:"enfants",    label:"Enfants",          color:"#EC4899",forTypes:["expense"],       isDefault:true, icon:"👶"},
-  {id:"animaux",    label:"Animaux",          color:"#22C55E",forTypes:["expense"],       isDefault:true, icon:"🐾"},
-  {id:"telecom",    label:"Télécom",          color:"#38BDF8",forTypes:["expense"],       isDefault:true, icon:"📱"},
-  {id:"loisirs",    label:"Loisirs",          color:"#FB923C",forTypes:["expense"],       isDefault:true, icon:"🎉"},
-  {id:"epargne",    label:"Épargne",          color:"#059669",forTypes:["epargne"],       isDefault:true, icon:"🏦"},
-  {id:"retraite",   label:"Retraite",         color:"#A78BFA",forTypes:["epargne"],       isDefault:true, icon:"🌅"},
+  // ── REVENUS ──
+  {id:"revenus",      label:"Revenus",                 color:"#10B981",forTypes:["income"],  isDefault:true,icon:"dollar"},
+  {id:"salaire",      label:"Salaire net (emploi)",    color:"#34D399",forTypes:["income"],  isDefault:true,icon:"briefcase",parentId:"revenus"},
+  {id:"livraison",    label:"Revenu livraison",        color:"#06B6D4",forTypes:["income"],  isDefault:true,icon:"truck",    parentId:"revenus"},
+  {id:"interets",     label:"Intérêts & placements",   color:"#A7F3D0",forTypes:["income"],  isDefault:true,icon:"trending", parentId:"revenus"},
+  // ── HABITATION ──
+  {id:"habitation",   label:"Habitation",              color:"#7C3AED",forTypes:["expense"], isDefault:true,icon:"home"},
+  {id:"loyer",        label:"Loyer",                   color:"#8B5CF6",forTypes:["expense"], isDefault:true,icon:"home",     parentId:"habitation"},
+  {id:"electricite",  label:"Électricité & chauffage", color:"#A78BFA",forTypes:["expense"], isDefault:true,icon:"bolt",     parentId:"habitation"},
+  {id:"assurance_hab",label:"Assurance habitation",    color:"#C4B5FD",forTypes:["expense"], isDefault:true,icon:"shield",   parentId:"habitation"},
+  // ── ALIMENTATION ──
+  {id:"alim",         label:"Alimentation",            color:"#F59E0B",forTypes:["expense"], isDefault:true,icon:"fork"},
+  {id:"epicerie",     label:"Épicerie",                color:"#FCD34D",forTypes:["expense"], isDefault:true,icon:"cart",     parentId:"alim"},
+  {id:"restaurant",   label:"Restaurant & café",       color:"#F59E0B",forTypes:["expense"], isDefault:true,icon:"fork",     parentId:"alim"},
+  // ── TRANSPORT ──
+  {id:"transport",    label:"Transport",               color:"#3B82F6",forTypes:["expense"], isDefault:true,icon:"car"},
+  {id:"pret_auto",    label:"Prêt auto",               color:"#60A5FA",forTypes:["expense"], isDefault:true,icon:"car",      parentId:"transport"},
+  {id:"essence",      label:"Essence",                 color:"#93C5FD",forTypes:["expense"], isDefault:true,icon:"gas",      parentId:"transport"},
+  {id:"assurance_auto",label:"Assurance auto",         color:"#BFDBFE",forTypes:["expense"], isDefault:true,icon:"shield",   parentId:"transport"},
+  {id:"reparation",   label:"Réparation & entretien",  color:"#2563EB",forTypes:["expense"], isDefault:true,icon:"wrench",   parentId:"transport"},
+  {id:"immat",        label:"Immatriculation",         color:"#1D4ED8",forTypes:["expense"], isDefault:true,icon:"card",     parentId:"transport"},
+  {id:"transport_com",label:"Transport en commun",     color:"#1E40AF",forTypes:["expense"], isDefault:true,icon:"bus",      parentId:"transport"},
+  // ── SANTÉ ──
+  {id:"sante",        label:"Soins & santé",           color:"#F43F5E",forTypes:["expense"], isDefault:true,icon:"heart"},
+  {id:"pharmacie",    label:"Pharmacie & médicaments", color:"#FB7185",forTypes:["expense"], isDefault:true,icon:"pill",     parentId:"sante"},
+  {id:"dentiste",     label:"Dentiste",                color:"#FDA4AF",forTypes:["expense"], isDefault:true,icon:"tooth",    parentId:"sante"},
+  {id:"sport_sante",  label:"Sport & bien-être",       color:"#FECDD3",forTypes:["expense"], isDefault:true,icon:"target",   parentId:"sante"},
+  // ── FORMATION ──
+  {id:"formation",    label:"Formation & école",       color:"#8B5CF6",forTypes:["expense"], isDefault:true,icon:"book"},
+  // ── FRAIS FINANCIERS ──
+  {id:"financiers",   label:"Frais financiers",        color:"#06B6D4",forTypes:["expense"], isDefault:true,icon:"card"},
+  {id:"frais_banque", label:"Frais bancaires",         color:"#22D3EE",forTypes:["expense"], isDefault:true,icon:"bank",     parentId:"financiers"},
+  {id:"frais_carte",  label:"Frais carte crédit",      color:"#67E8F9",forTypes:["expense"], isDefault:true,icon:"card",     parentId:"financiers"},
+  // ── ENFANTS & FAMILLE ──
+  {id:"enfants",      label:"Enfants & famille",       color:"#EC4899",forTypes:["expense"], isDefault:true,icon:"gift"},
+  {id:"argent_poche", label:"Argent de poche",         color:"#F472B6",forTypes:["expense"], isDefault:true,icon:"dollar",   parentId:"enfants"},
+  {id:"bus_scolaire", label:"Transport scolaire",      color:"#FBCFE8",forTypes:["expense"], isDefault:true,icon:"bus",      parentId:"enfants"},
+  // ── ANIMAUX ──
+  {id:"animaux",      label:"Animaux",                 color:"#22C55E",forTypes:["expense"], isDefault:true,icon:"paw"},
+  // ── TÉLÉCOM ──
+  {id:"telecom",      label:"Télécom",                 color:"#38BDF8",forTypes:["expense"], isDefault:true,icon:"wifi"},
+  {id:"cellulaire",   label:"Cellulaire",              color:"#7DD3FC",forTypes:["expense"], isDefault:true,icon:"phone",    parentId:"telecom"},
+  {id:"internet_tv",  label:"Internet & télévision",   color:"#BAE6FD",forTypes:["expense"], isDefault:true,icon:"tv",       parentId:"telecom"},
+  // ── LOISIRS ──
+  {id:"loisirs",      label:"Loisirs",                 color:"#FB923C",forTypes:["expense"], isDefault:true,icon:"music"},
+  {id:"streaming",    label:"Streaming & abonnements", color:"#FDBA74",forTypes:["expense"], isDefault:true,icon:"tv",       parentId:"loisirs"},
+  {id:"sorties",      label:"Sorties & activités",     color:"#FED7AA",forTypes:["expense"], isDefault:true,icon:"music",    parentId:"loisirs"},
+  {id:"voyages_dep",  label:"Voyages",                 color:"#FFEDD5",forTypes:["expense"], isDefault:true,icon:"plane",    parentId:"loisirs"},
+  // ── ÉPARGNE ──
+  {id:"epargne",      label:"Épargne",                 color:"#059669",forTypes:["epargne"], isDefault:true,icon:"piggy"},
+  {id:"fonds_urgence",label:"Fonds d'urgence",         color:"#34D399",forTypes:["epargne"], isDefault:true,icon:"shield",   parentId:"epargne"},
+  {id:"epargne_maison",label:"Maison & immobilier",    color:"#6EE7B7",forTypes:["epargne"], isDefault:true,icon:"home",     parentId:"epargne"},
+  {id:"epargne_voyage",label:"Voyage (épargne)",       color:"#A7F3D0",forTypes:["epargne"], isDefault:true,icon:"plane",    parentId:"epargne"},
+  {id:"celiapp",      label:"CELIAPP",                 color:"#064E3B",forTypes:["epargne"], isDefault:true,icon:"key",      parentId:"epargne"},
+  {id:"actions",      label:"Actions & placements",    color:"#065F46",forTypes:["epargne"], isDefault:true,icon:"trending", parentId:"epargne"},
+  // ── RETRAITE ──
+  {id:"retraite",     label:"Retraite",                color:"#A78BFA",forTypes:["epargne"], isDefault:true,icon:"sun"},
+  {id:"reer",         label:"REER",                    color:"#C4B5FD",forTypes:["epargne"], isDefault:true,icon:"piggy",    parentId:"retraite"},
+  {id:"celi",         label:"CELI",                    color:"#DDD6FE",forTypes:["epargne"], isDefault:true,icon:"target",   parentId:"retraite"},
 ];
 
 const MFULL=["Janvier","Février","Mars","Avril","Mai","Juin","Juillet","Août","Septembre","Octobre","Novembre","Décembre"];
@@ -263,32 +358,15 @@ function MiniPie({data}){
 }
 
 // ── CAT ICONS ────────────────────────────────────────────────────────
-function CatSVG({id,size}){
-  const p={stroke:"white",strokeWidth:"1.8",strokeLinecap:"round",strokeLinejoin:"round",fill:"none"};
-  if(id==="revenus")    return<svg width={size} height={size} viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="7" {...p}/><path d="M12 7.5v9M9.5 9.5h4.5a1.5 1.5 0 010 3h-3a1.5 1.5 0 000 3H15" {...p}/></svg>;
-  if(id==="salaire")    return<svg width={size} height={size} viewBox="0 0 24 24" fill="none"><rect x="5" y="8" width="14" height="11" rx="2" {...p}/><path d="M9 8V7a3 3 0 016 0v1M5 13h14" {...p}/></svg>;
-  if(id==="livraison")  return<svg width={size} height={size} viewBox="0 0 24 24" fill="none"><rect x="4" y="7" width="11" height="10" rx="1.5" {...p}/><path d="M15 9h3l2 4v4h-5" {...p}/><circle cx="7" cy="18.5" r="1.8" fill="white"/><circle cx="17" cy="18.5" r="1.8" fill="white"/></svg>;
-  if(id==="habitation") return<svg width={size} height={size} viewBox="0 0 24 24" fill="none"><path d="M3 11L12 3l9 8v9a1 1 0 01-1 1H4a1 1 0 01-1-1V11z" {...p}/><rect x="9" y="14" width="6" height="7" rx=".5" {...p}/></svg>;
-  if(id==="alim")       return<svg width={size} height={size} viewBox="0 0 24 24" fill="none"><path d="M8 3v6a3 3 0 006 0V3M11 13v8" {...p}/><path d="M18 3v18M15 3v5c0 1.7 1.3 3 3 3" {...p}/></svg>;
-  if(id==="transport")  return<svg width={size} height={size} viewBox="0 0 24 24" fill="none"><path d="M6 10l1.5-4h9L18 10" {...p}/><rect x="3" y="10" width="18" height="7" rx="2" {...p}/><circle cx="7.5" cy="17" r="2" fill="white"/><circle cx="16.5" cy="17" r="2" fill="white"/><path d="M3 13.5h2M19 13.5h2" stroke="white" strokeWidth="1.8" strokeLinecap="round"/></svg>;
-  if(id==="sante")      return<svg width={size} height={size} viewBox="0 0 24 24" fill="none"><path d="M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 000-7.78z" {...p}/><path d="M9 12h6M12 9v6" stroke="white" strokeWidth="1.8" strokeLinecap="round"/></svg>;
-  if(id==="formation")  return<svg width={size} height={size} viewBox="0 0 24 24" fill="none"><rect x="4" y="4" width="13" height="16" rx="1.5" {...p}/><path d="M8 9h6M8 12h6M8 15h4" stroke="white" strokeWidth="1.8" strokeLinecap="round"/></svg>;
-  if(id==="financiers") return<svg width={size} height={size} viewBox="0 0 24 24" fill="none"><rect x="2" y="5" width="20" height="14" rx="2" {...p}/><path d="M2 10h20" stroke="white" strokeWidth="1.8"/><path d="M6 15h4M15 15h3" stroke="white" strokeWidth="1.8" strokeLinecap="round"/></svg>;
-  if(id==="enfants")    return<svg width={size} height={size} viewBox="0 0 24 24" fill="none"><circle cx="8" cy="8" r="2.5" {...p}/><path d="M3 19v-1a5 5 0 0110 0v1" {...p}/><circle cx="17" cy="9" r="2" stroke="white" strokeWidth="1.5" fill="none"/><path d="M13.5 19v-1a3.5 3.5 0 017 0v1" stroke="white" strokeWidth="1.5" strokeLinecap="round" fill="none"/></svg>;
-  if(id==="animaux")    return<svg width={size} height={size} viewBox="0 0 24 24" fill="none"><ellipse cx="8" cy="8" rx="2" ry="2.5" fill="white" fillOpacity=".85"/><ellipse cx="16" cy="8" rx="2" ry="2.5" fill="white" fillOpacity=".85"/><ellipse cx="5" cy="13" rx="1.8" ry="2.2" fill="white" fillOpacity=".85"/><ellipse cx="19" cy="13" rx="1.8" ry="2.2" fill="white" fillOpacity=".85"/><path d="M9 17s-.5 4 3 4 3-4 3-4-1.5-2.5-3-2.5S9 17 9 17z" fill="white" fillOpacity=".85"/></svg>;
-  if(id==="telecom")    return<svg width={size} height={size} viewBox="0 0 24 24" fill="none"><path d="M5.5 12.5a9.5 9.5 0 0113 0M2 9a14.5 14.5 0 0120 0M9 16a5 5 0 016 0" stroke="white" strokeWidth="1.8" strokeLinecap="round"/><circle cx="12" cy="20" r="1.5" fill="white"/></svg>;
-  if(id==="loisirs")    return<svg width={size} height={size} viewBox="0 0 24 24" fill="none"><rect x="2" y="8" width="20" height="12" rx="3" {...p}/><circle cx="8" cy="13" r="1.5" stroke="white" strokeWidth="1.5" fill="none"/><path d="M6 11.5v3M6.5 13h3" stroke="white" strokeWidth="1.8" strokeLinecap="round"/><circle cx="17" cy="12" r="1" fill="white"/><circle cx="17" cy="14.5" r="1" fill="white"/></svg>;
-  if(id==="epargne")    return<svg width={size} height={size} viewBox="0 0 24 24" fill="none"><path d="M5 11V9a7 7 0 0114 0v2" {...p}/><rect x="3" y="11" width="18" height="10" rx="2" {...p}/><circle cx="12" cy="16" r="2" {...p}/></svg>;
-  if(id==="retraite")   return<svg width={size} height={size} viewBox="0 0 24 24" fill="none"><path d="M12 15a3 3 0 100-6 3 3 0 000 6z" {...p}/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41" stroke="white" strokeWidth="1.8" strokeLinecap="round"/></svg>;
-  return null;
-}
-
 function CatIconBadge({cat,size=40}){
   const iconSize=Math.round(size*.56);
-  const svg=CatSVG({id:cat.id,size:iconSize});
+  const icoName=cat.icon;
   return(
-    <div style={{width:size,height:size,borderRadius:Math.round(size*.32),background:cat.color,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
-      {svg||<span style={{fontSize:Math.round(size*.42),lineHeight:1}}>{cat.icon||"•"}</span>}
+    <div style={{width:size,height:size,borderRadius:Math.round(size*.32),background:cat.color||C.accent,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+      {icoName&&ILIB[icoName]
+        ?<IcoSVG name={icoName} size={iconSize} color="white"/>
+        :<span style={{fontSize:Math.round(size*.38),lineHeight:1,color:"white",fontWeight:700}}>$</span>
+      }
     </div>
   );
 }
@@ -361,7 +439,7 @@ function CatChips({cats,value,onChange,type}){
       {[{id:"all",label:"Tout",color:C.accent},...visible].map(c=>(
         <div key={c.id} className="chip tap" onClick={()=>onChange(c.id)}
           style={{background:value===c.id?(c.color||C.accent)+"25":C.card2,color:value===c.id?(c.color||C.accent):C.muted,borderColor:value===c.id?(c.color||C.accent):"transparent",fontWeight:value===c.id?600:400}}>
-          {c.icon?c.icon+" ":""}{c.label}
+          {c.icon&&ILIB[c.icon]&&<span style={{marginRight:3,display:"inline-flex",verticalAlign:"middle"}}><IcoSVG name={c.icon} size={11} color={value===c.id?(c.color||C.accent):C.muted}/></span>}{c.label}
         </div>
       ))}
     </div>
@@ -399,10 +477,16 @@ function TxnSheet({txn,cats,accounts,onClose,onDelete,onEdit}){
   const [cat,setCat]=useState(txn.category||"alim");
   const [date,setDate]=useState(txn.date||todayStr());
   const [accountId,setAccountId]=useState(txn.accountId||"");
+  const validCats=cats.filter(c=>c.forTypes?.includes(txn.type));
+  const sheetParentCats=validCats.filter(c=>!c.parentId);
+  const initCatObj=cats.find(c=>c.id===txn.category);
+  const initParent=initCatObj?.parentId||initCatObj?.id||sheetParentCats[0]?.id||"";
+  const [sheetSelParent,setSheetSelParent]=useState(initParent);
+  const sheetSubCats=sheetSelParent?cats.filter(c=>c.parentId===sheetSelParent&&c.forTypes?.includes(txn.type)):[];
+  function handleSheetParent(pid){setSheetSelParent(pid);const s=cats.filter(c=>c.parentId===pid&&c.forTypes?.includes(txn.type));setCat(s.length>0?s[0].id:pid);}
   const currentCat=cats.find(c=>c.id===cat)||cats[3];
   const fromAcct=accounts.find(a=>a.id===txn.accountId);
   const toAcct=accounts.find(a=>a.id===txn.accountToId);
-  const validCats=cats.filter(c=>!c.forTypes||c.forTypes.includes(txn.type));
   function save(){
     const n=parseFloat(amount.replace(",","."));if(!n||isNaN(n))return;
     onEdit({...txn,description:desc,amount:n,category:cat,date,accountId:accountId||txn.accountId});
@@ -430,11 +514,11 @@ function TxnSheet({txn,cats,accounts,onClose,onDelete,onEdit}){
             </div>
           )}
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginTop:4}}>
-            <div className="tap" onClick={()=>setMode("edit")} style={{textAlign:"center",padding:"13px",borderRadius:14,background:C.accentL,fontSize:14,fontWeight:700,color:C.accent,border:`1px solid ${C.accent}33`}}>
-              ✏️ Modifier
+            <div className="tap" onClick={()=>setMode("edit")} style={{display:"flex",alignItems:"center",justifyContent:"center",gap:7,padding:"13px",borderRadius:14,background:C.accentL,fontSize:14,fontWeight:700,color:C.accent,border:`1px solid ${C.accent}33`}}>
+              <IcoSVG name="pencil" size={15} color={C.accent}/> Modifier
             </div>
-            <div className="tap" onClick={()=>setMode("confirm")} style={{textAlign:"center",padding:"13px",borderRadius:14,background:C.redL,fontSize:14,fontWeight:700,color:C.red,border:`1px solid ${C.red}33`}}>
-              🗑 Supprimer
+            <div className="tap" onClick={()=>setMode("confirm")} style={{display:"flex",alignItems:"center",justifyContent:"center",gap:7,padding:"13px",borderRadius:14,background:C.redL,fontSize:14,fontWeight:700,color:C.red,border:`1px solid ${C.red}33`}}>
+              <IcoSVG name="trash" size={15} color={C.red}/> Supprimer
             </div>
           </div>
         </>}
@@ -459,17 +543,34 @@ function TxnSheet({txn,cats,accounts,onClose,onDelete,onEdit}){
             <input type="date" value={date} onChange={e=>setDate(e.target.value)}
               style={{width:"100%",fontSize:15,border:"none",background:"transparent",color:C.text,padding:0}}/>
           </div>
-          {/* Catégorie */}
+          {/* Catégorie — deux niveaux */}
           <div style={{background:C.card2,borderRadius:14,padding:"12px 14px",marginBottom:10}}>
             <p style={{fontSize:10,color:C.muted,margin:"0 0 8px",textTransform:"uppercase",letterSpacing:".07em"}}>Catégorie</p>
-            <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
-              {validCats.map(c=>(
-                <div key={c.id} className="chip tap" onClick={()=>setCat(c.id)}
-                  style={{background:cat===c.id?c.color+"28":"rgba(255,255,255,.05)",color:cat===c.id?c.color:C.sec,borderColor:cat===c.id?c.color:C.border,fontWeight:cat===c.id?700:400}}>
-                  {c.icon} {c.label}
-                </div>
-              ))}
+            <div style={{display:"flex",flexWrap:"wrap",gap:6,marginBottom:sheetSubCats.length>0?9:0}}>
+              {sheetParentCats.map(c=>{
+                const isSel=sheetSelParent===c.id;
+                return(
+                  <div key={c.id} className="tap" onClick={()=>handleSheetParent(c.id)}
+                    style={{display:"flex",alignItems:"center",gap:5,padding:"5px 10px",borderRadius:10,background:isSel?c.color+"28":"rgba(255,255,255,.05)",border:`1.5px solid ${isSel?c.color:C.border}`}}>
+                    <IcoSVG name={c.icon||"dollar"} size={12} color={isSel?c.color:"rgba(255,255,255,.35)"}/>
+                    <span style={{fontSize:11,color:isSel?c.color:C.sec,fontWeight:isSel?700:400}}>{c.label}</span>
+                  </div>
+                );
+              })}
             </div>
+            {sheetSubCats.length>0&&(
+              <div>
+                <p style={{fontSize:9,color:C.muted,margin:"0 0 6px",textTransform:"uppercase",letterSpacing:".06em"}}>Sous-catégorie</p>
+                <div style={{display:"flex",flexWrap:"wrap",gap:5}}>
+                  {sheetSubCats.map(c=>(
+                    <div key={c.id} className="chip tap" onClick={()=>setCat(c.id)}
+                      style={{background:cat===c.id?c.color+"28":"rgba(255,255,255,.05)",color:cat===c.id?c.color:C.sec,borderColor:cat===c.id?c.color:C.border,fontWeight:cat===c.id?700:400,fontSize:11}}>
+                      {c.label}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
           {/* Compte */}
           {accounts.length>0&&!isSav&&(
@@ -551,9 +652,9 @@ function Home({txns,cats,accounts,budgets,vnpHistory,setTab}){
             <p style={{fontSize:15,fontWeight:800,margin:0,letterSpacing:"-0.5px",color:(income-expenses)>=0?"#6EE7B7":"#FCA5A5"}}>{(income-expenses)>=0?"+":""}{fmt(income-expenses)}</p>
           </div>
           <div style={{background:"rgba(124,58,237,.18)",borderRadius:12,padding:"9px 12px",border:"1px solid rgba(124,58,237,.22)"}}>
-            <p style={{fontSize:9,color:"rgba(255,255,255,.45)",margin:"0 0 3px",textTransform:"uppercase",letterSpacing:".05em"}}>🏦 Épargne</p>
+            <p style={{fontSize:9,color:"rgba(255,255,255,.45)",margin:"0 0 3px",textTransform:"uppercase",letterSpacing:".05em",display:"flex",alignItems:"center",gap:4}}><IcoSVG name="piggy" size={10} color="rgba(255,255,255,.45)"/>Épargne</p>
             <p style={{fontSize:15,fontWeight:800,margin:"0 0 5px",letterSpacing:"-0.5px",color:"#C4B5FD"}}>{fmt(savings)}{savingsBgt>0&&<span style={{fontSize:9,fontWeight:500,color:"rgba(196,181,253,.6)",marginLeft:3}}>/ {fmt(savingsBgt)}</span>}</p>
-            {savingsBgt>0&&<><div style={{height:3,background:"rgba(0,0,0,.3)",borderRadius:2}}><div style={{width:`${Math.min(savings/savingsBgt*100,100)}%`,height:"100%",background:savings>=savingsBgt?"#6EE7B7":"#C4B5FD",borderRadius:2,transition:"width .5s"}}/></div><p style={{fontSize:8,color:"rgba(196,181,253,.7)",margin:"3px 0 0"}}>{savings>=savingsBgt?"🎉 Objectif atteint !":Math.round(savings/savingsBgt*100)+"% atteint"}</p></>}
+            {savingsBgt>0&&<><div style={{height:3,background:"rgba(0,0,0,.3)",borderRadius:2}}><div style={{width:`${Math.min(savings/savingsBgt*100,100)}%`,height:"100%",background:savings>=savingsBgt?"#6EE7B7":"#C4B5FD",borderRadius:2,transition:"width .5s"}}/></div><p style={{fontSize:8,color:"rgba(196,181,253,.7)",margin:"3px 0 0"}}>{savings>=savingsBgt?"Objectif atteint !":Math.round(savings/savingsBgt*100)+"% atteint"}</p></>}
           </div>
         </div>
       </div>
@@ -574,7 +675,7 @@ function Home({txns,cats,accounts,budgets,vnpHistory,setTab}){
                   return(
                     <div key={id}>
                       <div style={{display:"flex",justifyContent:"space-between",marginBottom:3}}>
-                        <span style={{fontSize:11,color:C.sec}}>{cat.icon} {cat.label}</span>
+                        <span style={{fontSize:11,color:C.sec,display:"inline-flex",alignItems:"center",gap:4}}>{cat.icon&&ILIB[cat.icon]&&<IcoSVG name={cat.icon} size={10} color={cat.color}/>}{cat.label}</span>
                         <span style={{fontSize:11,fontWeight:600,color:C.text}}>{fmt(amt)}</span>
                       </div>
                       <div style={{height:3,background:C.border2,borderRadius:2}}><div style={{width:`${pct2}%`,height:"100%",background:cat.color,borderRadius:2}}/></div>
@@ -719,12 +820,23 @@ function AddTxn({addMany,accounts,cats,onDone}){
   const [cat,setCat]=useState("alim");const [date,setDate]=useState(todayStr());
   const [fromId,setFromId]=useState(accounts[0]?.id||"");
   const [toId,setToId]=useState(accounts[1]?.id||"");
+  const [selParent,setSelParent]=useState("alim");
 
   // Auto-select default category when type changes
   useEffect(()=>{
-    const validCats=cats.filter(c=>!c.forTypes||c.forTypes.includes(type));
-    if(!validCats.find(c=>c.id===cat)){setCat(validCats[0]?.id||"alim");}
+    const validCats=cats.filter(c=>c.forTypes?.includes(type));
+    const firstParent=validCats.find(c=>!c.parentId);
+    const newParent=firstParent?.id||"";
+    setSelParent(newParent);
+    const firstSub=validCats.find(c=>c.parentId===newParent);
+    setCat(firstSub?.id||newParent||"");
   },[type]);
+
+  function handleParentSel(parentId){
+    setSelParent(parentId);
+    const subs=cats.filter(c=>c.parentId===parentId&&c.forTypes?.includes(type));
+    setCat(subs.length>0?subs[0].id:parentId);
+  }
 
   function save(){
     const n=parseFloat(amount.replace(",","."));if(!n||isNaN(n))return;
@@ -732,7 +844,9 @@ function AddTxn({addMany,accounts,cats,onDone}){
     addMany([txn]);onDone();
   }
 
-  const validCats=cats.filter(c=>!c.forTypes||c.forTypes.includes(type));
+  const validCats=cats.filter(c=>c.forTypes?.includes(type));
+  const parentCats=validCats.filter(c=>!c.parentId);
+  const subCats=selParent?cats.filter(c=>c.parentId===selParent&&c.forTypes?.includes(type)):[];
   const tCols={expense:C.red,income:C.green,epargne:C.accent};const tCol=tCols[type];
   const assetAccts=accounts.filter(a=>!atypeById(a.accountType)?.isDebt);
 
@@ -741,8 +855,9 @@ function AddTxn({addMany,accounts,cats,onDone}){
       <div style={{background:C.surf,padding:"16px",borderBottom:`1px solid ${C.border}`}}>
         <p style={{fontSize:18,fontWeight:700,color:C.text,margin:"0 0 14px"}}>Nouvelle transaction</p>
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8}}>
-          {[{v:"expense",l:"Dépense 💸",c:C.red},{v:"income",l:"Revenu 💰",c:C.green},{v:"epargne",l:"Épargne 🏦",c:C.accent}].map(t=>(
-            <div key={t.v} className="tap" onClick={()=>setType(t.v)} style={{textAlign:"center",padding:"10px 4px",borderRadius:14,fontSize:12,fontWeight:700,background:type===t.v?t.c+"25":"transparent",color:type===t.v?t.c:C.muted,border:`1.5px solid ${type===t.v?t.c:C.border2}`,lineHeight:1.3}}>
+          {[{v:"expense",l:"Dépense",c:C.red,ico:"trending"},{v:"income",l:"Revenu",c:C.green,ico:"dollar"},{v:"epargne",l:"Épargne",c:C.accent,ico:"piggy"}].map(t=>(
+            <div key={t.v} className="tap" onClick={()=>setType(t.v)} style={{display:"flex",flexDirection:"column",alignItems:"center",gap:5,padding:"10px 4px",borderRadius:14,fontSize:12,fontWeight:700,background:type===t.v?t.c+"25":"transparent",color:type===t.v?t.c:C.muted,border:`1.5px solid ${type===t.v?t.c:C.border2}`}}>
+              <IcoSVG name={t.ico} size={16} color={type===t.v?t.c:"rgba(255,255,255,.3)"}/>
               {t.l}
             </div>
           ))}
@@ -759,17 +874,34 @@ function AddTxn({addMany,accounts,cats,onDone}){
           <input value={desc} onChange={e=>setDesc(e.target.value)} placeholder={type==="income"?"Ex: Salaire iA, livraison...":type==="epargne"?"Ex: Transfert CELI...":"Ex: Épicerie Metro, loyer..."}
             style={{width:"100%",fontSize:15,border:"none",background:"transparent",padding:0,color:C.text}}/>
         </Card>
-        {/* Category */}
+        {/* Two-level Category Picker */}
         <Card style={{padding:"13px 16px"}}>
           <p style={{fontSize:10,color:C.muted,margin:"0 0 10px",textTransform:"uppercase",letterSpacing:".07em"}}>Catégorie</p>
-          <div style={{display:"flex",flexWrap:"wrap",gap:7}}>
-            {validCats.map(c=>(
-              <div key={c.id} className="chip tap" onClick={()=>setCat(c.id)}
-                style={{background:cat===c.id?c.color+"28":"rgba(255,255,255,.05)",color:cat===c.id?c.color:C.sec,borderColor:cat===c.id?c.color:C.border,fontWeight:cat===c.id?700:400,fontSize:12}}>
-                {c.icon} {c.label}
-              </div>
-            ))}
+          <div style={{display:"flex",flexWrap:"wrap",gap:6,marginBottom:subCats.length>0?10:0}}>
+            {parentCats.map(c=>{
+              const isSel=selParent===c.id;
+              return(
+                <div key={c.id} className="tap" onClick={()=>handleParentSel(c.id)}
+                  style={{display:"flex",alignItems:"center",gap:6,padding:"6px 11px",borderRadius:12,background:isSel?c.color+"28":"rgba(255,255,255,.05)",border:`1.5px solid ${isSel?c.color:C.border}`,cursor:"pointer"}}>
+                  <IcoSVG name={c.icon||"dollar"} size={13} color={isSel?c.color:"rgba(255,255,255,.35)"}/>
+                  <span style={{fontSize:12,color:isSel?c.color:C.sec,fontWeight:isSel?700:400}}>{c.label}</span>
+                </div>
+              );
+            })}
           </div>
+          {subCats.length>0&&(
+            <div>
+              <p style={{fontSize:9,color:C.muted,margin:"0 0 7px",textTransform:"uppercase",letterSpacing:".06em"}}>Sous-catégorie</p>
+              <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
+                {subCats.map(c=>(
+                  <div key={c.id} className="chip tap" onClick={()=>setCat(c.id)}
+                    style={{background:cat===c.id?c.color+"28":"rgba(255,255,255,.05)",color:cat===c.id?c.color:C.sec,borderColor:cat===c.id?c.color:C.border,fontWeight:cat===c.id?700:400,fontSize:12}}>
+                    {c.label}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </Card>
         {/* Date */}
         <Card style={{padding:"13px 16px"}}>
@@ -864,7 +996,7 @@ function BudgetView({txns,cats,budgets,setBudgets}){
         <Card style={{padding:"13px 16px"}}>
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
             <div style={{display:"flex",alignItems:"center",gap:10}}>
-              <CatIconBadge cat={{id:"revenus",color:C.green}} size={34}/>
+              <CatIconBadge cat={{id:"revenus",color:C.green,icon:"dollar"}} size={34}/>
               <div>
                 <p style={{fontSize:14,fontWeight:600,margin:0,color:C.text}}>Revenus visés</p>
                 <p style={{fontSize:11,margin:0,color:incomeBgt>0&&incomeActual>=incomeBgt?C.green:C.muted}}>
@@ -892,52 +1024,101 @@ function BudgetView({txns,cats,budgets,setBudgets}){
           )}
         </Card>
         <p style={{fontSize:11,color:C.muted,paddingLeft:4}}>Touche un montant pour le modifier</p>
-        {/* Expense budgets */}
-        <Card>
-          {expCats.map((cat,i,arr)=>{
-            const bgt=+(budgets[cat.id]||0);const spent=bycat[cat.id]||0;
-            const pct=bgt>0?Math.min(spent/bgt*100,100):0;
-            const col=pct>=100?C.red:pct>=80?C.orange:C.green;const isEdit=editing===cat.id;
-            return(
-              <div key={cat.id} style={{padding:"12px 16px",borderBottom:i<arr.length-1?`1px solid ${C.border}`:"none"}}>
-                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:bgt>0?8:0}}>
+        {/* Expense budgets — grouped by parent category */}
+        {(()=>{
+          const parents=expCats.filter(c=>!c.parentId);
+          const rows=[];
+          parents.forEach((par,pi)=>{
+            const subs=expCats.filter(c=>c.parentId===par.id);
+            // aggregate spent/budget for parent = sum of sub-cats (or direct parent txns)
+            const allIds=[par.id,...subs.map(s=>s.id)];
+            const parSpent=allIds.reduce((s,id)=>s+(bycat[id]||0),0);
+            const parBgt=allIds.reduce((s,id)=>s+(+(budgets[id]||0)),0);
+            const parPct=parBgt>0?Math.min(parSpent/parBgt*100,100):0;
+            const parCol=parPct>=100?C.red:parPct>=80?C.orange:C.green;
+            const isLastEntry=pi===parents.length-1&&subs.length===0;
+            rows.push(
+              <div key={par.id} style={{padding:"12px 16px",borderBottom:(!isLastEntry)?`1px solid ${C.border}`:"none",background:"transparent"}}>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:parBgt>0?8:0}}>
                   <div style={{display:"flex",alignItems:"center",gap:10}}>
-                    <CatIconBadge cat={cat} size={34}/>
+                    <CatIconBadge cat={par} size={34}/>
                     <div>
-                      <p style={{fontSize:13,fontWeight:500,margin:0,color:C.text}}>{cat.label}</p>
-                      <p style={{fontSize:10,margin:0,color:C.muted}}>{bgt>0?`${fmt(spent)} / ${fmt(bgt)}`:"Aucun budget"}</p>
+                      <p style={{fontSize:13,fontWeight:700,margin:0,color:C.text}}>{par.label}</p>
+                      <p style={{fontSize:10,margin:0,color:C.muted}}>{parBgt>0?`${fmt(parSpent)} / ${fmt(parBgt)}`:"Aucun budget"}</p>
                     </div>
                   </div>
-                  {isEdit
+                  {editing===par.id
                     ?<div style={{display:"flex",gap:6,alignItems:"center"}}>
-                      <input autoFocus value={editVal} onChange={e=>setEditVal(e.target.value)} onBlur={()=>save(cat.id)} onKeyDown={e=>e.key==="Enter"&&save(cat.id)}
+                      <input autoFocus value={editVal} onChange={e=>setEditVal(e.target.value)} onBlur={()=>save(par.id)} onKeyDown={e=>e.key==="Enter"&&save(par.id)}
                         style={{width:85,fontSize:14,fontWeight:700,textAlign:"right",border:"none",background:C.card2,borderRadius:10,padding:"6px 9px",color:C.text}}/>
                       <span style={{fontSize:11,color:C.muted}}>$</span>
                     </div>
-                    :<span className="tap" onClick={()=>{setEditing(cat.id);setEditVal(bgt>0?String(bgt):"");}}
-                      style={{fontSize:14,fontWeight:700,color:bgt>0?C.text:C.muted,background:bgt===0?C.card2:"transparent",padding:bgt===0?"5px 11px":"0",borderRadius:10}}>
-                      {bgt>0?fmt(bgt):"Définir"}
+                    :<span className="tap" onClick={()=>{setEditing(par.id);setEditVal(+(budgets[par.id]||0)>0?String(budgets[par.id]):"");}}
+                      style={{fontSize:14,fontWeight:700,color:parBgt>0?C.text:C.muted,background:parBgt===0?C.card2:"transparent",padding:parBgt===0?"5px 11px":"0",borderRadius:10}}>
+                      {parBgt>0?fmt(parBgt):"Définir"}
                     </span>
                   }
                 </div>
-                {bgt>0&&(
+                {parBgt>0&&(
                   <>
-                    <div style={{height:4,background:C.border2,borderRadius:2}}><div style={{width:`${pct}%`,height:"100%",background:col,borderRadius:2,transition:"width .4s"}}/></div>
+                    <div style={{height:4,background:C.border2,borderRadius:2}}><div style={{width:`${parPct}%`,height:"100%",background:parCol,borderRadius:2,transition:"width .4s"}}/></div>
                     <div style={{display:"flex",justifyContent:"space-between",marginTop:4}}>
-                      <span style={{fontSize:10,color:C.muted}}>{Math.round(pct)}%</span>
-                      <span style={{fontSize:10,color:pct>=100?C.red:pct>=80?C.orange:C.muted}}>{pct>=100?"Dépassé de "+fmt(spent-bgt):"Reste "+fmt(bgt-spent)}</span>
+                      <span style={{fontSize:10,color:C.muted}}>{Math.round(parPct)}%</span>
+                      <span style={{fontSize:10,color:parPct>=100?C.red:parPct>=80?C.orange:C.muted}}>{parPct>=100?"Dépassé de "+fmt(parSpent-parBgt):"Reste "+fmt(parBgt-parSpent)}</span>
                     </div>
                   </>
                 )}
               </div>
             );
-          })}
-        </Card>
+            // sub-category rows
+            subs.forEach((sub,si)=>{
+              const bgt=+(budgets[sub.id]||0);const spent=bycat[sub.id]||0;
+              const pct=bgt>0?Math.min(spent/bgt*100,100):0;
+              const col=pct>=100?C.red:pct>=80?C.orange:C.green;
+              const isLast=pi===parents.length-1&&si===subs.length-1;
+              rows.push(
+                <div key={sub.id} style={{padding:"10px 16px 10px 28px",borderBottom:!isLast?`1px solid ${C.border}`:"none",background:"rgba(255,255,255,.018)"}}>
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:bgt>0?7:0}}>
+                    <div style={{display:"flex",alignItems:"center",gap:8}}>
+                      <div style={{width:10,height:10,borderLeft:`2px solid ${C.border2}`,borderBottom:`2px solid ${C.border2}`,borderRadius:"0 0 0 3px",flexShrink:0,marginRight:2}}/>
+                      <CatIconBadge cat={sub} size={28}/>
+                      <div>
+                        <p style={{fontSize:12,fontWeight:500,margin:0,color:C.sec}}>{sub.label}</p>
+                        <p style={{fontSize:10,margin:0,color:C.muted}}>{bgt>0?`${fmt(spent)} / ${fmt(bgt)}`:"—"}</p>
+                      </div>
+                    </div>
+                    {editing===sub.id
+                      ?<div style={{display:"flex",gap:6,alignItems:"center"}}>
+                        <input autoFocus value={editVal} onChange={e=>setEditVal(e.target.value)} onBlur={()=>save(sub.id)} onKeyDown={e=>e.key==="Enter"&&save(sub.id)}
+                          style={{width:78,fontSize:13,fontWeight:700,textAlign:"right",border:"none",background:C.card2,borderRadius:10,padding:"5px 8px",color:C.text}}/>
+                        <span style={{fontSize:11,color:C.muted}}>$</span>
+                      </div>
+                      :<span className="tap" onClick={()=>{setEditing(sub.id);setEditVal(bgt>0?String(bgt):"");}}
+                        style={{fontSize:13,fontWeight:700,color:bgt>0?C.text:C.muted,background:bgt===0?C.card2:"transparent",padding:bgt===0?"4px 9px":"0",borderRadius:10}}>
+                        {bgt>0?fmt(bgt):"Définir"}
+                      </span>
+                    }
+                  </div>
+                  {bgt>0&&(
+                    <div style={{paddingLeft:22}}>
+                      <div style={{height:3,background:C.border2,borderRadius:2}}><div style={{width:`${pct}%`,height:"100%",background:col,borderRadius:2,transition:"width .4s"}}/></div>
+                      <div style={{display:"flex",justifyContent:"space-between",marginTop:3}}>
+                        <span style={{fontSize:9,color:C.muted}}>{Math.round(pct)}%</span>
+                        <span style={{fontSize:9,color:pct>=100?C.red:pct>=80?C.orange:C.muted}}>{pct>=100?"Dépassé de "+fmt(spent-bgt):"Reste "+fmt(bgt-spent)}</span>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            });
+          });
+          return <Card>{rows}</Card>;
+        })()}
         {/* Épargne objectif mensuel */}
         <Card style={{padding:"13px 16px"}}>
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
             <div style={{display:"flex",alignItems:"center",gap:10}}>
-              <CatIconBadge cat={{id:"epargne",color:C.accent}} size={34}/>
+              <CatIconBadge cat={{id:"epargne",color:C.accent,icon:"piggy"}} size={34}/>
               <div>
                 <p style={{fontSize:14,fontWeight:600,margin:0,color:C.text}}>Épargne mensuelle visée</p>
                 <p style={{fontSize:11,margin:0,color:epagneBgt>0&&savingsActual>=epagneBgt?C.accent:C.muted}}>
@@ -964,49 +1145,92 @@ function BudgetView({txns,cats,budgets,setBudgets}){
             </div>
           )}
         </Card>
-        {/* Épargne par catégorie */}
-        {savCats.length>0&&(
-          <Card>
-            {savCats.map((cat,i,arr)=>{
-              const bgt=+(budgets[cat.id]||0);const sav=bysav[cat.id]||0;
+        {/* Épargne par catégorie — avec sous-catégories */}
+        {savCats.length>0&&(()=>{
+          const savParents=savCats.filter(c=>!c.parentId);
+          const rows=[];
+          savParents.forEach((par,pi)=>{
+            const subs=savCats.filter(c=>c.parentId===par.id);
+            const allIds=[par.id,...subs.map(s=>s.id)];
+            const parSav=allIds.reduce((s,id)=>s+(bysav[id]||0),0);
+            const parBgt=allIds.reduce((s,id)=>s+(+(budgets[id]||0)),0);
+            const parPct=parBgt>0?Math.min(parSav/parBgt*100,100):0;
+            const isLastEntry=pi===savParents.length-1&&subs.length===0;
+            rows.push(
+              <div key={par.id} style={{padding:"12px 16px",borderBottom:!isLastEntry?`1px solid ${C.border}`:"none"}}>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:parBgt>0?8:0}}>
+                  <div style={{display:"flex",alignItems:"center",gap:10}}>
+                    <CatIconBadge cat={par} size={34}/>
+                    <div>
+                      <p style={{fontSize:13,fontWeight:700,margin:0,color:C.text}}>{par.label}</p>
+                      <p style={{fontSize:10,margin:0,color:C.muted}}>{parBgt>0?`${fmt(parSav)} / ${fmt(parBgt)}`:"Aucun objectif"}</p>
+                    </div>
+                  </div>
+                  {editing===par.id
+                    ?<div style={{display:"flex",gap:6,alignItems:"center"}}>
+                      <input autoFocus value={editVal} onChange={e=>setEditVal(e.target.value)} onBlur={()=>save(par.id)} onKeyDown={e=>e.key==="Enter"&&save(par.id)}
+                        style={{width:85,fontSize:14,fontWeight:700,textAlign:"right",border:"none",background:C.card2,borderRadius:10,padding:"6px 9px",color:C.text}}/>
+                      <span style={{fontSize:11,color:C.muted}}>$</span>
+                    </div>
+                    :<span className="tap" onClick={()=>{setEditing(par.id);setEditVal(+(budgets[par.id]||0)>0?String(budgets[par.id]):"");}}
+                      style={{fontSize:14,fontWeight:700,color:parBgt>0?C.accent:C.muted,background:parBgt===0?C.card2:"transparent",padding:parBgt===0?"5px 11px":"0",borderRadius:10}}>
+                      {parBgt>0?fmt(parBgt):"Définir"}
+                    </span>
+                  }
+                </div>
+                {parBgt>0&&(
+                  <>
+                    <div style={{height:4,background:C.border2,borderRadius:2}}><div style={{width:`${parPct}%`,height:"100%",background:C.accent,borderRadius:2,transition:"width .4s"}}/></div>
+                    <div style={{display:"flex",justifyContent:"space-between",marginTop:4}}>
+                      <span style={{fontSize:10,color:C.muted}}>{Math.round(parPct)}%</span>
+                      <span style={{fontSize:10,color:parPct>=100?C.accent:C.muted}}>{parPct>=100?"Objectif atteint !":"Reste "+fmt(parBgt-parSav)}</span>
+                    </div>
+                  </>
+                )}
+              </div>
+            );
+            subs.forEach((sub,si)=>{
+              const bgt=+(budgets[sub.id]||0);const sav=bysav[sub.id]||0;
               const pct=bgt>0?Math.min(sav/bgt*100,100):0;
-              const col=pct>=100?C.accent:pct>=80?C.teal:C.muted;const isEdit=editing===cat.id;
-              return(
-                <div key={cat.id} style={{padding:"12px 16px",borderBottom:i<arr.length-1?`1px solid ${C.border}`:"none"}}>
-                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:bgt>0?8:0}}>
-                    <div style={{display:"flex",alignItems:"center",gap:10}}>
-                      <CatIconBadge cat={cat} size={34}/>
+              const isLast=pi===savParents.length-1&&si===subs.length-1;
+              rows.push(
+                <div key={sub.id} style={{padding:"10px 16px 10px 28px",borderBottom:!isLast?`1px solid ${C.border}`:"none",background:"rgba(255,255,255,.018)"}}>
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:bgt>0?7:0}}>
+                    <div style={{display:"flex",alignItems:"center",gap:8}}>
+                      <div style={{width:10,height:10,borderLeft:`2px solid ${C.border2}`,borderBottom:`2px solid ${C.border2}`,borderRadius:"0 0 0 3px",flexShrink:0,marginRight:2}}/>
+                      <CatIconBadge cat={sub} size={28}/>
                       <div>
-                        <p style={{fontSize:13,fontWeight:500,margin:0,color:C.text}}>{cat.label}</p>
-                        <p style={{fontSize:10,margin:0,color:C.muted}}>{bgt>0?`${fmt(sav)} / ${fmt(bgt)}`:"Aucun objectif"}</p>
+                        <p style={{fontSize:12,fontWeight:500,margin:0,color:C.sec}}>{sub.label}</p>
+                        <p style={{fontSize:10,margin:0,color:C.muted}}>{bgt>0?`${fmt(sav)} / ${fmt(bgt)}`:"—"}</p>
                       </div>
                     </div>
-                    {isEdit
+                    {editing===sub.id
                       ?<div style={{display:"flex",gap:6,alignItems:"center"}}>
-                        <input autoFocus value={editVal} onChange={e=>setEditVal(e.target.value)} onBlur={()=>save(cat.id)} onKeyDown={e=>e.key==="Enter"&&save(cat.id)}
-                          style={{width:85,fontSize:14,fontWeight:700,textAlign:"right",border:"none",background:C.card2,borderRadius:10,padding:"6px 9px",color:C.text}}/>
+                        <input autoFocus value={editVal} onChange={e=>setEditVal(e.target.value)} onBlur={()=>save(sub.id)} onKeyDown={e=>e.key==="Enter"&&save(sub.id)}
+                          style={{width:78,fontSize:13,fontWeight:700,textAlign:"right",border:"none",background:C.card2,borderRadius:10,padding:"5px 8px",color:C.text}}/>
                         <span style={{fontSize:11,color:C.muted}}>$</span>
                       </div>
-                      :<span className="tap" onClick={()=>{setEditing(cat.id);setEditVal(bgt>0?String(bgt):"");}}
-                        style={{fontSize:14,fontWeight:700,color:bgt>0?C.accent:C.muted,background:bgt===0?C.card2:"transparent",padding:bgt===0?"5px 11px":"0",borderRadius:10}}>
+                      :<span className="tap" onClick={()=>{setEditing(sub.id);setEditVal(bgt>0?String(bgt):"");}}
+                        style={{fontSize:13,fontWeight:700,color:bgt>0?C.accent:C.muted,background:bgt===0?C.card2:"transparent",padding:bgt===0?"4px 9px":"0",borderRadius:10}}>
                         {bgt>0?fmt(bgt):"Définir"}
                       </span>
                     }
                   </div>
                   {bgt>0&&(
-                    <>
-                      <div style={{height:4,background:C.border2,borderRadius:2}}><div style={{width:`${pct}%`,height:"100%",background:C.accent,borderRadius:2,transition:"width .4s"}}/></div>
-                      <div style={{display:"flex",justifyContent:"space-between",marginTop:4}}>
-                        <span style={{fontSize:10,color:C.muted}}>{Math.round(pct)}%</span>
-                        <span style={{fontSize:10,color:pct>=100?C.accent:C.muted}}>{pct>=100?"Objectif atteint ! 🎉":"Reste "+fmt(bgt-sav)}</span>
+                    <div style={{paddingLeft:22}}>
+                      <div style={{height:3,background:C.border2,borderRadius:2}}><div style={{width:`${pct}%`,height:"100%",background:C.accent,borderRadius:2,transition:"width .4s"}}/></div>
+                      <div style={{display:"flex",justifyContent:"space-between",marginTop:3}}>
+                        <span style={{fontSize:9,color:C.muted}}>{Math.round(pct)}%</span>
+                        <span style={{fontSize:9,color:pct>=100?C.accent:C.muted}}>{pct>=100?"Atteint !":"Reste "+fmt(bgt-sav)}</span>
                       </div>
-                    </>
+                    </div>
                   )}
                 </div>
               );
-            })}
-          </Card>
-        )}
+            });
+          });
+          return <Card>{rows}</Card>;
+        })()}
         <div style={{height:8}}/>
       </div>
     </div>
@@ -1089,7 +1313,7 @@ function ChartsView({txns,cats,accounts,vnpHistory}){
               <div style={{flex:1,display:"flex",flexDirection:"column",gap:7}}>
                 {pieData.map(d=>(
                   <div key={d.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                    <div style={{display:"flex",alignItems:"center",gap:6}}><div style={{width:7,height:7,borderRadius:"50%",background:d.color}}/><span style={{fontSize:11,color:C.sec}}>{d.icon} {d.label}</span></div>
+                    <div style={{display:"flex",alignItems:"center",gap:6}}><div style={{width:7,height:7,borderRadius:"50%",background:d.color,flexShrink:0}}/><span style={{fontSize:11,color:C.sec}}>{d.label}</span></div>
                     <div style={{textAlign:"right"}}>
                       <span style={{fontSize:11,fontWeight:700,color:C.text}}>{fmt(d.v)}</span>
                       <span style={{fontSize:9,color:C.muted,display:"block"}}>{Math.round(d.v/totalPie*100)}%</span>
@@ -1226,79 +1450,158 @@ function ComptesView({accounts,setAccounts}){
 
 // ── CATS VIEW ──────────────────────────────────────────────────────
 function CatsView({cats,setCats}){
-  const [showAdd,setShowAdd]=useState(false);
-  const [form,setForm]=useState({label:"",icon:"📌",color:COLORS[0],forTypes:["expense"]});
+  const [mode,setMode]=useState("list"); // list | add | edit
+  const [editId,setEditId]=useState(null);
+  const BLANK={label:"",icon:"dollar",color:COLORS[0],forTypes:["expense"],parentId:""};
+  const [form,setForm]=useState(BLANK);
   const TYPE_OPTS=[{id:"expense",l:"Dépense"},{id:"income",l:"Revenu"},{id:"epargne",l:"Épargne"}];
-  function addCat(){if(!form.label.trim())return;const c={id:"c-"+uid(),label:form.label.trim(),icon:form.icon,color:form.color,forTypes:form.forTypes,isDefault:false};setCats(p=>[...p,c]);setShowAdd(false);setForm({label:"",icon:"📌",color:COLORS[0],forTypes:["expense"]});}
-  function delCat(id){setCats(p=>p.filter(c=>c.id!==id));}
-  const ICONS=["📌","🏡","🍕","🚕","❤️","📚","💳","👶","🐾","📱","🎉","🏦","💼","🛵","🎮","✈️","🧴","🏋️","🎵","🛒","☕","🍺","🌅","💡","🔧","🏥","🦷","👗","📦","🏆"];
+  const ICO_KEYS=Object.keys(ILIB);
+
+  function resetForm(){setForm(BLANK);}
+  function startAdd(){resetForm();setMode("add");}
+  function startEdit(cat){
+    setEditId(cat.id);
+    setForm({label:cat.label,icon:cat.icon||"dollar",color:cat.color,forTypes:cat.forTypes||["expense"],parentId:cat.parentId||""});
+    setMode("edit");
+  }
+  function cancel(){setMode("list");resetForm();setEditId(null);}
+
+  function addCat(){
+    if(!form.label.trim())return;
+    const c={id:"c-"+uid(),label:form.label.trim(),icon:form.icon,color:form.color,forTypes:form.forTypes,isDefault:false};
+    if(form.parentId)c.parentId=form.parentId;
+    setCats(p=>[...p,c]);cancel();
+  }
+  function saveEdit(){
+    if(!form.label.trim())return;
+    setCats(p=>p.map(c=>c.id===editId?{...c,label:form.label.trim(),icon:form.icon,color:form.color}:c));
+    cancel();
+  }
+  function delCat(id){
+    setCats(p=>p.filter(c=>c.id!==id&&c.parentId!==id));
+    cancel();
+  }
+
+  function CatForm({isEdit}){
+    const parentOpts=cats.filter(c=>!c.parentId&&c.forTypes?.some(t=>form.forTypes.includes(t))&&(!isEdit||c.id!==editId));
+    return(
+      <Card style={{padding:"14px 16px"}}>
+        <p style={{fontSize:13,fontWeight:700,color:C.text,margin:"0 0 14px"}}>{isEdit?"Modifier catégorie":"Nouvelle catégorie"}</p>
+        <div style={{marginBottom:10}}>
+          <p style={{fontSize:10,color:C.muted,margin:"0 0 7px",textTransform:"uppercase",letterSpacing:".07em"}}>Nom</p>
+          <input value={form.label} onChange={e=>setForm(p=>({...p,label:e.target.value}))} placeholder="Ex: Épicerie spéciale..."
+            style={{width:"100%",fontSize:15,border:"none",background:C.card2,borderRadius:10,padding:"9px 12px",color:C.text}}/>
+        </div>
+        {!isEdit&&(
+          <div style={{marginBottom:10}}>
+            <p style={{fontSize:10,color:C.muted,margin:"0 0 7px",textTransform:"uppercase",letterSpacing:".07em"}}>Type</p>
+            <div style={{display:"flex",gap:7}}>
+              {TYPE_OPTS.map(t=>(
+                <div key={t.id} className="chip tap" onClick={()=>setForm(p=>({...p,forTypes:[t.id],parentId:""}))}
+                  style={{background:form.forTypes.includes(t.id)?C.accentL:C.card2,color:form.forTypes.includes(t.id)?C.accent:C.muted,borderColor:form.forTypes.includes(t.id)?C.accent:"transparent"}}>
+                  {t.l}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+        {!isEdit&&parentOpts.length>0&&(
+          <div style={{marginBottom:10}}>
+            <p style={{fontSize:10,color:C.muted,margin:"0 0 7px",textTransform:"uppercase",letterSpacing:".07em"}}>Rattacher à (sous-catégorie de)</p>
+            <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
+              <div className="chip tap" onClick={()=>setForm(p=>({...p,parentId:""}))}
+                style={{background:!form.parentId?C.accentL:C.card2,color:!form.parentId?C.accent:C.muted,borderColor:!form.parentId?C.accent:"transparent"}}>
+                Principale
+              </div>
+              {parentOpts.map(po=>(
+                <div key={po.id} className="chip tap" onClick={()=>setForm(p=>({...p,parentId:po.id}))}
+                  style={{background:form.parentId===po.id?po.color+"30":C.card2,color:form.parentId===po.id?po.color:C.muted,borderColor:form.parentId===po.id?po.color:"transparent"}}>
+                  {po.label}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+        <div style={{marginBottom:10}}>
+          <p style={{fontSize:10,color:C.muted,margin:"0 0 7px",textTransform:"uppercase",letterSpacing:".07em"}}>Icône</p>
+          <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
+            {ICO_KEYS.map(ik=>(
+              <div key={ik} className="tap" onClick={()=>setForm(p=>({...p,icon:ik}))}
+                style={{width:36,height:36,borderRadius:10,background:form.icon===ik?form.color+"30":C.card2,border:`1.5px solid ${form.icon===ik?form.color:"transparent"}`,display:"flex",alignItems:"center",justifyContent:"center"}}>
+                <IcoSVG name={ik} size={17} color={form.icon===ik?form.color:"rgba(255,255,255,.38)"}/>
+              </div>
+            ))}
+          </div>
+        </div>
+        <div style={{marginBottom:14}}>
+          <p style={{fontSize:10,color:C.muted,margin:"0 0 7px",textTransform:"uppercase",letterSpacing:".07em"}}>Couleur</p>
+          <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
+            {COLORS.map(col=>(
+              <div key={col} className="tap" onClick={()=>setForm(p=>({...p,color:col}))}
+                style={{width:28,height:28,borderRadius:8,background:col,border:`2.5px solid ${form.color===col?"white":"transparent"}`,flexShrink:0}}/>
+            ))}
+          </div>
+        </div>
+        <div style={{display:"grid",gridTemplateColumns:isEdit?"1fr 1fr 1fr":"1fr 1fr",gap:8}}>
+          <div className="tap" onClick={cancel} style={{textAlign:"center",padding:"12px",borderRadius:14,background:C.card2,fontSize:14,fontWeight:600,color:C.sec}}>Annuler</div>
+          {isEdit&&<div className="tap" onClick={()=>delCat(editId)} style={{textAlign:"center",padding:"12px",borderRadius:14,background:C.redL,fontSize:14,fontWeight:600,color:C.red}}>Supprimer</div>}
+          <div className="tap" onClick={isEdit?saveEdit:addCat} style={{textAlign:"center",padding:"12px",borderRadius:14,background:C.accent,fontSize:14,fontWeight:700,color:"#fff"}}>{isEdit?"Sauvegarder":"Créer"}</div>
+        </div>
+      </Card>
+    );
+  }
+
+  function renderGroup(typeId,typeLabel){
+    const typeCats=cats.filter(c=>c.forTypes?.includes(typeId));
+    if(typeCats.length===0)return null;
+    const parents=typeCats.filter(c=>!c.parentId);
+    const orphans=typeCats.filter(c=>c.parentId&&!cats.find(p=>p.id===c.parentId));
+    return(
+      <div key={typeId}>
+        <p style={{fontSize:10,fontWeight:700,color:C.muted,textTransform:"uppercase",letterSpacing:".07em",marginBottom:8,paddingLeft:4}}>{typeLabel}</p>
+        <Card>
+          {[...parents,...orphans].map((par,pi,arr)=>{
+            const subs=typeCats.filter(c=>c.parentId===par.id);
+            const isLast=pi===arr.length-1;
+            return(
+              <React.Fragment key={par.id}>
+                <div style={{display:"flex",alignItems:"center",gap:11,padding:"11px 14px",borderBottom:(!isLast||subs.length>0)?`1px solid ${C.border}`:"none"}}>
+                  <CatIconBadge cat={par} size={36}/>
+                  <div style={{flex:1,minWidth:0}}>
+                    <p style={{fontSize:14,margin:0,color:C.text,fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{par.label}</p>
+                    {subs.length>0&&<p style={{fontSize:10,color:C.muted,margin:"2px 0 0"}}>{subs.length} sous-cat.</p>}
+                  </div>
+                  <div className="tap" onClick={()=>startEdit(par)} style={{padding:"5px 10px",borderRadius:8,background:C.accentL,color:C.accent,fontSize:11,fontWeight:600,marginRight:4,flexShrink:0}}>Modifier</div>
+                  {!par.isDefault&&<div className="tap" onClick={()=>delCat(par.id)} style={{padding:"5px 8px",borderRadius:8,background:C.redL,color:C.red,fontSize:12,fontWeight:700,flexShrink:0}}>✕</div>}
+                </div>
+                {subs.map((sub,si)=>(
+                  <div key={sub.id} style={{display:"flex",alignItems:"center",gap:10,padding:"9px 14px 9px 30px",borderBottom:(si<subs.length-1||!isLast)?`1px solid ${C.border}`:"none",background:"rgba(255,255,255,.02)"}}>
+                    <div style={{width:12,height:12,borderLeft:`2px solid ${C.border2}`,borderBottom:`2px solid ${C.border2}`,borderRadius:"0 0 0 4px",flexShrink:0,marginRight:2}}/>
+                    <CatIconBadge cat={sub} size={28}/>
+                    <div style={{flex:1,minWidth:0}}>
+                      <p style={{fontSize:13,margin:0,color:C.sec,fontWeight:500,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{sub.label}</p>
+                    </div>
+                    <div className="tap" onClick={()=>startEdit(sub)} style={{padding:"4px 9px",borderRadius:8,background:C.accentL,color:C.accent,fontSize:11,fontWeight:600,marginRight:4,flexShrink:0}}>Modifier</div>
+                    {!sub.isDefault&&<div className="tap" onClick={()=>delCat(sub.id)} style={{padding:"4px 7px",borderRadius:8,background:C.redL,color:C.red,fontSize:12,fontWeight:700,flexShrink:0}}>✕</div>}
+                  </div>
+                ))}
+              </React.Fragment>
+            );
+          })}
+        </Card>
+      </div>
+    );
+  }
+
   return(
     <div className="scroll">
       <div style={{padding:"12px 14px",display:"flex",flexDirection:"column",gap:10}}>
-        {showAdd&&(
-          <Card style={{padding:"14px 16px"}}>
-            <p style={{fontSize:13,fontWeight:700,color:C.text,margin:"0 0 14px"}}>Nouvelle catégorie</p>
-            <div style={{marginBottom:10}}>
-              <p style={{fontSize:10,color:C.muted,margin:"0 0 7px",textTransform:"uppercase",letterSpacing:".07em"}}>Nom</p>
-              <input value={form.label} onChange={e=>setForm(p=>({...p,label:e.target.value}))} placeholder="Ex: Épicerie spéciale, Streaming..."
-                style={{width:"100%",fontSize:15,border:"none",background:C.card2,borderRadius:10,padding:"9px 12px",color:C.text}}/>
-            </div>
-            <div style={{marginBottom:10}}>
-              <p style={{fontSize:10,color:C.muted,margin:"0 0 7px",textTransform:"uppercase",letterSpacing:".07em"}}>Icône</p>
-              <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
-                {ICONS.map(icon=>(
-                  <div key={icon} className="tap" onClick={()=>setForm(p=>({...p,icon}))}
-                    style={{width:32,height:32,borderRadius:8,background:form.icon===icon?C.accentL:C.card2,border:`1px solid ${form.icon===icon?C.accent:"transparent"}`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:16}}>
-                    {icon}
-                  </div>
-                ))}
-              </div>
-            </div>
-            <div style={{marginBottom:10}}>
-              <p style={{fontSize:10,color:C.muted,margin:"0 0 7px",textTransform:"uppercase",letterSpacing:".07em"}}>Couleur</p>
-              <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
-                {COLORS.map(col=>(
-                  <div key={col} className="tap" onClick={()=>setForm(p=>({...p,color:col}))}
-                    style={{width:28,height:28,borderRadius:8,background:col,border:`2px solid ${form.color===col?"white":"transparent"}`,flexShrink:0}}/>
-                ))}
-              </div>
-            </div>
-            <div style={{marginBottom:14}}>
-              <p style={{fontSize:10,color:C.muted,margin:"0 0 7px",textTransform:"uppercase",letterSpacing:".07em"}}>Pour quel type</p>
-              <div style={{display:"flex",gap:7}}>
-                {TYPE_OPTS.map(t=>(
-                  <div key={t.id} className="chip tap" onClick={()=>setForm(p=>({...p,forTypes:[t.id]}))}
-                    style={{background:form.forTypes.includes(t.id)?C.accentL:C.card2,color:form.forTypes.includes(t.id)?C.accent:C.muted,borderColor:form.forTypes.includes(t.id)?C.accent:"transparent"}}>
-                    {t.l}
-                  </div>
-                ))}
-              </div>
-            </div>
-            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
-              <div className="tap" onClick={()=>setShowAdd(false)} style={{textAlign:"center",padding:"12px",borderRadius:14,background:C.card2,fontSize:14,fontWeight:600,color:C.sec}}>Annuler</div>
-              <div className="tap" onClick={addCat} style={{textAlign:"center",padding:"12px",borderRadius:14,background:C.accent,fontSize:14,fontWeight:700,color:"#fff"}}>Créer</div>
-            </div>
-          </Card>
-        )}
-        {!showAdd&&<div className="tap" onClick={()=>setShowAdd(true)} style={{background:C.accentL,color:C.accent,textAlign:"center",padding:"13px",borderRadius:16,fontSize:15,fontWeight:700,border:`1px solid ${C.accent}44`}}>+ Ajouter une catégorie</div>}
-        {[{id:"expense",l:"Dépenses 💸"},{id:"income",l:"Revenus 💰"},{id:"epargne",l:"Épargne 🏦"}].map(({id,l})=>{
-          const group=cats.filter(c=>c.forTypes?.includes(id)||(!c.forTypes&&id==="expense"));
-          return group.length>0&&(
-            <div key={id}>
-              <p style={{fontSize:10,fontWeight:700,color:C.muted,textTransform:"uppercase",letterSpacing:".07em",marginBottom:8,paddingLeft:4}}>{l}</p>
-              <Card>
-                {group.map((cat,i)=>(
-                  <div key={cat.id} style={{display:"flex",alignItems:"center",gap:12,padding:"11px 16px",borderBottom:i<group.length-1?`1px solid ${C.border}`:"none"}}>
-                    <CatIconBadge cat={cat} size={36}/>
-                    <div style={{flex:1}}><p style={{fontSize:14,margin:0,color:C.text,fontWeight:500}}>{cat.label}</p></div>
-                    <div style={{width:10,height:10,borderRadius:"50%",background:cat.color,flexShrink:0}}/>
-                    <div className="tap" onClick={()=>delCat(cat.id)} style={{padding:"4px 10px",borderRadius:8,background:C.redL,color:C.red,fontSize:11,fontWeight:600}}>Retirer</div>
-                  </div>
-                ))}
-              </Card>
-            </div>
-          );
-        })}
+        {mode==="add"&&<CatForm isEdit={false}/>}
+        {mode==="edit"&&<CatForm isEdit={true}/>}
+        {mode==="list"&&<div className="tap" onClick={startAdd} style={{background:C.accentL,color:C.accent,textAlign:"center",padding:"13px",borderRadius:16,fontSize:15,fontWeight:700,border:`1px solid ${C.accent}44`}}>+ Ajouter une catégorie</div>}
+        {renderGroup("expense","Dépenses")}
+        {renderGroup("income","Revenus")}
+        {renderGroup("epargne","Épargne")}
         <div style={{height:8}}/>
       </div>
     </div>
@@ -1403,9 +1706,9 @@ Inclure TOUTES les transactions.`}]}]})});
                   style={{width:80,fontSize:14,fontWeight:700,border:"none",background:"transparent",padding:0,color:t.type==="income"?C.green:C.text,textAlign:"right"}}/>
               </div>
               <div style={{display:"flex",flexWrap:"wrap",gap:5}}>
-                {cats.filter(c=>!c.forTypes||c.forTypes.includes(t.type)).map(c=>(
-                  <div key={c.id} className="chip tap" onClick={()=>updateCat(t.id,c.id)} style={{background:t.category===c.id?c.color+"28":"rgba(255,255,255,.05)",color:t.category===c.id?c.color:C.muted,borderColor:t.category===c.id?c.color:C.border,fontWeight:t.category===c.id?700:400,fontSize:11}}>
-                    {c.icon} {c.label}
+                {cats.filter(c=>c.forTypes?.includes(t.type)&&!c.parentId).map(c=>(
+                  <div key={c.id} className="chip tap" onClick={()=>updateCat(t.id,c.id)} style={{display:"inline-flex",alignItems:"center",gap:4,background:t.category===c.id?c.color+"28":"rgba(255,255,255,.05)",color:t.category===c.id?c.color:C.muted,borderColor:t.category===c.id?c.color:C.border,fontWeight:t.category===c.id?700:400,fontSize:11}}>
+                    {c.icon&&ILIB[c.icon]&&<IcoSVG name={c.icon} size={11} color={t.category===c.id?c.color:C.muted}/>}{c.label}
                   </div>
                 ))}
               </div>
