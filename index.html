@@ -1954,7 +1954,7 @@ function SubsView({subs,setSubs,addMany}){
       {showForm&&<div className="overlay" onClick={()=>{setShowForm(false);setEditSub(null);setForm(BLANK);}}
         style={{position:"fixed",inset:0,background:"rgba(0,0,0,.6)",zIndex:900,display:"flex",alignItems:"flex-end"}}>
         <div className="sheet" onClick={e=>e.stopPropagation()}
-          style={{width:"100%",background:C.surf,borderTopLeftRadius:28,borderTopRightRadius:28,padding:"20px 20px 0",maxHeight:"92vh",overflowY:"scroll",display:"flex",flexDirection:"column"}}>
+          style={{width:"100%",background:C.surf,borderTopLeftRadius:28,borderTopRightRadius:28,padding:"20px 20px 0",maxHeight:"90vh",overflowY:"auto",WebkitOverflowScrolling:"touch"}}>
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:18}}>
             <p style={{fontSize:17,fontWeight:800,color:C.text,margin:0}}>{editSub?"Modifier l'abonnement":"Nouvel abonnement"}</p>
             <div className="tap" onClick={()=>{setShowForm(false);setEditSub(null);setForm(BLANK);}}><IcoSVG name="x" size={20} color={C.muted}/></div>
@@ -2005,7 +2005,7 @@ function SubsView({subs,setSubs,addMany}){
             style={{background:C.accent,color:"white",textAlign:"center",padding:"15px",borderRadius:16,fontSize:16,fontWeight:700}}>
             {editSub?"Enregistrer":"Ajouter"}
           </div>
-          <div style={{height:"max(24px, calc(24px + env(safe-area-inset-bottom)))"}}/>
+          <div style={{height:"max(90px, calc(80px + env(safe-area-inset-bottom)))"}}/>
         </div>
       </div>}
     </div>
