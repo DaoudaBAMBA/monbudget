@@ -215,6 +215,36 @@ const monthKey=(d=new Date())=>`${d.getFullYear()}-${String(d.getMonth()+1).padS
 const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,5);
 const fmt=n=>new Intl.NumberFormat("fr-CA",{style:"currency",currency:"CAD",minimumFractionDigits:2}).format(Math.abs(n));
 
+// ── SUBSCRIPTIONS UTILITIES ───────────────────────────────────────────
+const FREQS=[
+  {id:"weekly",   label:"Hebdomadaire",   shortLabel:"/ sem.",   days:7},
+  {id:"biweekly", label:"Aux 2 semaines", shortLabel:"/ 2 sem.", days:14},
+  {id:"monthly",  label:"Mensuel",        shortLabel:"/ mois",   days:30},
+  {id:"quarterly",label:"Trimestriel",    shortLabel:"/ trim.",  days:91},
+  {id:"yearly",   label:"Annuel",         shortLabel:"/ an",     days:365},
+];
+function toMonthly(amount,freq){
+  if(freq==="weekly")return amount*52/12;
+  if(freq==="biweekly")return amount*26/12;
+  if(freq==="quarterly")return amount/3;
+  if(freq==="yearly")return amount/12;
+  return amount;
+}
+function advanceDate(dateStr,freq){
+  const d=new Date(dateStr+"T12:00:00");
+  if(freq==="weekly")d.setDate(d.getDate()+7);
+  else if(freq==="biweekly")d.setDate(d.getDate()+14);
+  else if(freq==="monthly")d.setMonth(d.getMonth()+1);
+  else if(freq==="quarterly")d.setMonth(d.getMonth()+3);
+  else if(freq==="yearly")d.setFullYear(d.getFullYear()+1);
+  return d.toISOString().slice(0,10);
+}
+function daysUntil(dateStr){
+  const t=new Date();t.setHours(0,0,0,0);
+  const s=new Date(dateStr+"T00:00:00");
+  return Math.round((s-t)/(86400000));
+}
+
 // ── SUPABASE ─────────────────────────────────────────────────────────
 const SB_URL="https://idpselwktwlutnpcewsy.supabase.co";
 const SB_KEY="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlkcHNlbHdrdHdsdXRucGNld3N5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUzNjY5NTMsImV4cCI6MjA5MDk0Mjk1M30.60LBlT4fuV6UsyACajOGTXB2qcdccXm0qPNX-YKYjlw";
@@ -605,7 +635,7 @@ function TxnSheet({txn,cats,accounts,onClose,onDelete,onEdit}){
 }
 
 // ── HOME ────────────────────────────────────────────────────────────
-function Home({txns,cats,accounts,budgets,vnpHistory,setTab}){
+function Home({txns,cats,accounts,budgets,subs=[],setSubs,addMany,vnpHistory,setTab}){
   const now=new Date();
   const [year,setYear]=useState(now.getFullYear());
   const [month,setMonth]=useState(now.getMonth());
@@ -619,6 +649,8 @@ function Home({txns,cats,accounts,budgets,vnpHistory,setTab}){
   const vnp=assets-liab;
   const savingsBgt=Object.entries(budgets).filter(([k])=>cats.find(c=>c.id===k&&c.forTypes?.includes("epargne"))).reduce((s,[,v])=>s+(+v||0),0);
   const incomeBgt=Object.entries(budgets).filter(([k])=>cats.find(c=>c.id===k&&c.forTypes?.includes("income"))).reduce((s,[,v])=>s+(+v||0),0);
+  const today=todayStr();
+  const upcomingSubs=subs.filter(s=>s.active!==false&&daysUntil(s.nextDate)<=7).sort((a,b)=>a.nextDate.localeCompare(b.nextDate)).slice(0,5);
   const totalBgt=Object.entries(budgets).filter(([k])=>cats.find(c=>c.id===k&&c.forTypes?.includes("expense"))).reduce((s,[,v])=>s+(+v||0),0);
   const bycat={};mt.filter(t=>t.type==="expense").forEach(t=>{bycat[t.category]=(bycat[t.category]||0)+t.amount;});
   const topCats=Object.entries(bycat).sort((a,b)=>b[1]-a[1]).slice(0,3);
@@ -727,6 +759,42 @@ function Home({txns,cats,accounts,budgets,vnpHistory,setTab}){
             ))
           }
         </Card>
+
+        {/* ── ABONNEMENTS À VENIR ── */}
+        {upcomingSubs.length>0&&<Card>
+          <div style={{padding:"12px 16px 10px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+            <div style={{display:"flex",alignItems:"center",gap:7}}>
+              <IcoSVG name="repeat" size={14} color={C.accent}/>
+              <p style={{fontSize:13,fontWeight:700,color:C.text,margin:0}}>Prochains paiements</p>
+            </div>
+            <span className="tap" onClick={()=>setTab("subs")} style={{fontSize:12,color:C.accent}}>Tout voir</span>
+          </div>
+          {upcomingSubs.map((sub,i)=>{
+            const days=daysUntil(sub.nextDate);
+            const urgCol=days<0?C.red:days<=1?C.orange:days<=3?C.accent:C.sec;
+            const dayLbl=days<0?`${Math.abs(days)}j en retard`:days===0?"Aujourd'hui":days===1?"Demain":`Dans ${days}j`;
+            return(
+              <div key={sub.id} style={{padding:"9px 14px",display:"flex",alignItems:"center",gap:10,borderTop:`1px solid ${C.border}`}}>
+                <CatIconBadge cat={{icon:sub.icon,color:sub.color}} size={32}/>
+                <div style={{flex:1,minWidth:0}}>
+                  <p style={{fontSize:12,fontWeight:600,margin:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{sub.name}</p>
+                  <p style={{fontSize:10,color:urgCol,margin:"1px 0 0",fontWeight:500}}>{dayLbl}</p>
+                </div>
+                <div style={{display:"flex",alignItems:"center",gap:8,flexShrink:0}}>
+                  <span style={{fontSize:13,fontWeight:700}}>{fmt(sub.amount)}</span>
+                  {days<=1&&<div className="tap" onClick={()=>{
+                    addMany([{id:uid(),type:"expense",amount:+sub.amount,description:sub.name,date:today,category:sub.category||null,accountId:null}]);
+                    setSubs(p=>p.map(s=>s.id===sub.id?{...s,nextDate:advanceDate(s.nextDate,s.frequency)}:s));
+                  }} style={{background:C.greenL,border:`1px solid ${C.green}50`,borderRadius:8,padding:"4px 9px",display:"flex",alignItems:"center",gap:4}}>
+                    <IcoSVG name="check" size={11} color={C.green}/>
+                    <span style={{fontSize:10,fontWeight:700,color:C.green}}>Payé</span>
+                  </div>}
+                </div>
+              </div>
+            );
+          })}
+        </Card>}
+
         <div style={{height:8}}/>
       </div>
     </div>
@@ -974,8 +1042,8 @@ function BudgetView({txns,cats,budgets,setBudgets}){
   const bycat={};mt.filter(t=>t.type==="expense").forEach(t=>{bycat[t.category]=(bycat[t.category]||0)+t.amount;});
   const bysav={};mt.filter(t=>t.type==="epargne").forEach(t=>{bysav[t.category]=(bysav[t.category]||0)+t.amount;});
   const [editing,setEditing]=useState(null);const [editVal,setEditVal]=useState("");
-  const [collapsed,setCollapsed]=useState({});
-  function toggle(id){setCollapsed(p=>({...p,[id]:!p[id]}));}
+  const [expanded,setExpanded]=useState({});
+  function toggle(id){setExpanded(p=>({...p,[id]:!p[id]}));}
   const expCats=cats.filter(c=>c.forTypes?.includes("expense"));
   const incCats=cats.filter(c=>c.forTypes?.includes("income"));
   const savCats=cats.filter(c=>c.forTypes?.includes("epargne"));
@@ -1047,7 +1115,7 @@ function BudgetView({txns,cats,budgets,setBudgets}){
       const parCol=parPct>=100?C.red:parPct>=80?C.orange:accentCol;
       const hasSubs=subs.length>0;
       const isLast=pi===parents.length-1;
-      const open=!collapsed[par.id];
+      const open=!!expanded[par.id];
       rows.push(
         <React.Fragment key={par.id}>
           <div style={{padding:"11px 14px",borderBottom:(hasSubs&&open)||!isLast?`1px solid ${C.border}`:"none"}}>
@@ -1157,8 +1225,8 @@ function RepartitionView({txns,cats,budgets}){
   const [month,setMonth]=useState(now.getMonth());
   const mk=`${year}-${String(month+1).padStart(2,"0")}`;
   const mt=txns.filter(t=>t.date?.startsWith(mk));
-  const [rCollapsed,setRCollapsed]=useState({});
-  function rToggle(id){setRCollapsed(p=>({...p,[id]:!p[id]}));}
+  const [rExpanded,setRExpanded]=useState({});
+  function rToggle(id){setRExpanded(p=>({...p,[id]:!p[id]}));}
   const byAll={};mt.forEach(t=>{byAll[t.category]=(byAll[t.category]||0)+t.amount;});
   const incTotal=mt.filter(t=>t.type==="income").reduce((s,t)=>s+t.amount,0);
   const expTotal=mt.filter(t=>t.type==="expense").reduce((s,t)=>s+t.amount,0);
@@ -1185,7 +1253,7 @@ function RepartitionView({txns,cats,budgets}){
             const bgtCol=parBgt>0&&parAmt>parBgt?C.red:color;
             const hasSubs=subs.length>0;
             const isLast=pi===parents.length-1;
-            const open=!rCollapsed[par.id];
+            const open=!!rExpanded[par.id];
             return(
               <React.Fragment key={par.id}>
                 <div style={{padding:"11px 14px",borderBottom:(hasSubs&&open)||!isLast?`1px solid ${C.border}`:"none"}}>
@@ -1493,8 +1561,8 @@ function CatsView({cats,setCats}){
   const [editId,setEditId]=useState(null);
   const BLANK={label:"",icon:"dollar",color:COLORS[0],forTypes:["expense"],parentId:""};
   const [form,setForm]=useState(BLANK);
-  const [catCollapsed,setCatCollapsed]=useState({});
-  function toggleCat(id){setCatCollapsed(p=>({...p,[id]:!p[id]}));}
+  const [catExpanded,setCatExpanded]=useState({});
+  function toggleCat(id){setCatExpanded(p=>({...p,[id]:!p[id]}));}
   const TYPE_OPTS=[{id:"expense",l:"Dépense"},{id:"income",l:"Revenu"},{id:"epargne",l:"Épargne"}];
   const ICO_KEYS=Object.keys(ILIB);
 
@@ -1605,7 +1673,7 @@ function CatsView({cats,setCats}){
             const subs=typeCats.filter(c=>c.parentId===par.id);
             const isLast=pi===arr.length-1;
             const hasSubs=subs.length>0;
-            const open=!catCollapsed[par.id];
+            const open=!!catExpanded[par.id];
             return(
               <React.Fragment key={par.id}>
                 <div style={{display:"flex",alignItems:"center",gap:9,padding:"11px 14px",borderBottom:(!isLast||hasSubs&&open)?`1px solid ${C.border}`:"none"}}>
@@ -1771,9 +1839,164 @@ Inclure TOUTES les transactions.`}]}]})});
   );
 }
 
+// ── ABONNEMENTS ───────────────────────────────────────────────────────
+function SubsView({subs,setSubs,addMany}){
+  const today=todayStr();
+  const [showForm,setShowForm]=useState(false);
+  const [editSub,setEditSub]=useState(null);
+  const [rowExpanded,setRowExpanded]=useState({});
+  const BLANK={id:"",name:"",amount:"",frequency:"monthly",nextDate:today,color:COLORS[0],icon:"repeat"};
+  const [form,setForm]=useState(BLANK);
+  const active=[...subs].filter(s=>s.active!==false).sort((a,b)=>a.nextDate.localeCompare(b.nextDate));
+  const monthlyTotal=active.reduce((s,sub)=>s+toMonthly(+sub.amount,sub.frequency),0);
+  const upcoming=active.filter(s=>daysUntil(s.nextDate)<=30);
+  const later=active.filter(s=>daysUntil(s.nextDate)>30);
+  function markPaid(sub){
+    addMany([{id:uid(),type:"expense",amount:+sub.amount,description:sub.name,date:today,category:sub.category||null,accountId:null}]);
+    setSubs(p=>p.map(s=>s.id===sub.id?{...s,nextDate:advanceDate(s.nextDate,s.frequency)}:s));
+    setRowExpanded({});
+  }
+  function saveSub(){
+    const amt=parseFloat(String(form.amount).replace(",","."));
+    if(!form.name||isNaN(amt)||amt<=0)return;
+    const sub={...form,id:form.id||uid(),amount:amt};
+    setSubs(p=>editSub?p.map(s=>s.id===editSub.id?sub:s):[sub,...p]);
+    setShowForm(false);setEditSub(null);setForm(BLANK);
+  }
+  function openAdd(){setForm({...BLANK,nextDate:today});setEditSub(null);setShowForm(true);}
+  function openEdit(sub){setForm({...sub,amount:String(sub.amount)});setEditSub(sub);setShowForm(true);}
+  function deleteSub(id){setSubs(p=>p.filter(s=>s.id!==id));setRowExpanded({});}
+  function SubRow({sub}){
+    const days=daysUntil(sub.nextDate);
+    const freq=FREQS.find(f=>f.id===sub.frequency)||FREQS[2];
+    const isOpen=!!rowExpanded[sub.id];
+    const urgCol=days<0?C.red:days<=3?C.orange:days<=7?C.accent:C.sec;
+    const dayLbl=days<0?`${Math.abs(days)}j en retard`:days===0?"Aujourd'hui":days===1?"Demain":`Dans ${days}j`;
+    return(
+      <React.Fragment key={sub.id}>
+        <div className="tap" onClick={()=>setRowExpanded(p=>({...p,[sub.id]:!p[sub.id]}))}
+          style={{padding:"12px 14px",display:"flex",gap:10,alignItems:"center",borderBottom:isOpen?"none":`1px solid ${C.border}`}}>
+          <CatIconBadge cat={{icon:sub.icon,color:sub.color}} size={40}/>
+          <div style={{flex:1,minWidth:0}}>
+            <p style={{fontSize:13,fontWeight:700,margin:0,color:C.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{sub.name}</p>
+            <p style={{fontSize:10,margin:"2px 0 0",color:C.muted}}>{freq.label} · {fmt(toMonthly(+sub.amount,sub.frequency))}/mois</p>
+          </div>
+          <div style={{textAlign:"right",flexShrink:0}}>
+            <p style={{fontSize:14,fontWeight:800,margin:0,color:C.text}}>{fmt(sub.amount)}</p>
+            <p style={{fontSize:10,margin:"2px 0 0",color:urgCol,fontWeight:500}}>{dayLbl}</p>
+          </div>
+        </div>
+        {isOpen&&<div style={{padding:"8px 14px 12px",background:"rgba(255,255,255,.025)",borderBottom:`1px solid ${C.border}`,display:"flex",gap:8,flexWrap:"wrap"}}>
+          {days<=7&&<div className="tap" onClick={()=>markPaid(sub)}
+            style={{display:"flex",alignItems:"center",gap:6,background:C.greenL,border:`1px solid ${C.green}50`,borderRadius:10,padding:"7px 13px"}}>
+            <IcoSVG name="check" size={13} color={C.green}/>
+            <span style={{fontSize:12,fontWeight:700,color:C.green}}>Marquer payé</span>
+          </div>}
+          <div className="tap" onClick={()=>openEdit(sub)}
+            style={{display:"flex",alignItems:"center",gap:6,background:C.card2,borderRadius:10,padding:"7px 13px"}}>
+            <IcoSVG name="pencil" size={13} color={C.sec}/>
+            <span style={{fontSize:12,color:C.sec}}>Modifier</span>
+          </div>
+          <div className="tap" onClick={()=>deleteSub(sub.id)}
+            style={{display:"flex",alignItems:"center",gap:6,background:C.redL,border:`1px solid ${C.red}30`,borderRadius:10,padding:"7px 13px"}}>
+            <IcoSVG name="trash" size={13} color={C.red}/>
+            <span style={{fontSize:12,color:C.red}}>Supprimer</span>
+          </div>
+        </div>}
+      </React.Fragment>
+    );
+  }
+  return(
+    <div className="scroll">
+      <div style={{background:C.accentB,padding:"18px 20px 22px",borderBottomLeftRadius:28,borderBottomRightRadius:28}}>
+        <p style={{fontSize:11,color:"rgba(255,255,255,.5)",margin:"0 0 2px",textTransform:"uppercase",letterSpacing:".07em"}}>Abonnements actifs</p>
+        <p style={{fontSize:30,fontWeight:800,margin:"0 0 3px",letterSpacing:"-1px"}}>{fmt(monthlyTotal)}<span style={{fontSize:13,fontWeight:500,opacity:.55}}> / mois</span></p>
+        <p style={{fontSize:12,color:"rgba(255,255,255,.55)",margin:"0 0 12px"}}>{active.length} abonnement{active.length!==1?"s":""} · {fmt(monthlyTotal*12)} / an</p>
+        <div className="tap" onClick={openAdd}
+          style={{display:"inline-flex",alignItems:"center",gap:7,background:"rgba(255,255,255,.15)",borderRadius:12,padding:"9px 16px",border:"1px solid rgba(255,255,255,.2)"}}>
+          <IcoSVG name="plus" size={14} color="white"/>
+          <span style={{fontSize:13,fontWeight:600,color:"white"}}>Ajouter un abonnement</span>
+        </div>
+      </div>
+      <div style={{padding:"12px 14px",display:"flex",flexDirection:"column",gap:12}}>
+        {active.length===0&&<Card><div style={{padding:"32px 16px",textAlign:"center"}}>
+          <IcoSVG name="repeat" size={32} color={C.muted}/>
+          <p style={{fontSize:14,color:C.muted,margin:"10px 0 4px"}}>Aucun abonnement</p>
+          <p style={{fontSize:12,color:C.muted}}>Netflix, Spotify, Hydro-Québec…</p>
+        </div></Card>}
+        {upcoming.length>0&&<div>
+          <p style={{fontSize:11,fontWeight:700,color:C.accent,textTransform:"uppercase",letterSpacing:".07em",margin:"0 0 6px",paddingLeft:2}}>À venir — 30 jours</p>
+          <Card>{upcoming.map(s=><SubRow key={s.id} sub={s}/>)}</Card>
+        </div>}
+        {later.length>0&&<div>
+          <p style={{fontSize:11,fontWeight:700,color:C.muted,textTransform:"uppercase",letterSpacing:".07em",margin:"0 0 6px",paddingLeft:2}}>Plus tard</p>
+          <Card>{later.map(s=><SubRow key={s.id} sub={s}/>)}</Card>
+        </div>}
+        <div style={{height:8}}/>
+      </div>
+      {showForm&&<div className="overlay" onClick={()=>{setShowForm(false);setEditSub(null);setForm(BLANK);}}
+        style={{position:"fixed",inset:0,background:"rgba(0,0,0,.6)",zIndex:900,display:"flex",alignItems:"flex-end"}}>
+        <div className="sheet" onClick={e=>e.stopPropagation()}
+          style={{width:"100%",background:C.surf,borderTopLeftRadius:28,borderTopRightRadius:28,padding:"20px 20px 36px",maxHeight:"88vh",overflowY:"auto"}}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:18}}>
+            <p style={{fontSize:17,fontWeight:800,color:C.text,margin:0}}>{editSub?"Modifier l'abonnement":"Nouvel abonnement"}</p>
+            <div className="tap" onClick={()=>{setShowForm(false);setEditSub(null);setForm(BLANK);}}><IcoSVG name="x" size={20} color={C.muted}/></div>
+          </div>
+          <div style={{marginBottom:12}}>
+            <p style={{fontSize:11,color:C.muted,marginBottom:5,fontWeight:600,textTransform:"uppercase",letterSpacing:".04em"}}>Nom</p>
+            <input value={form.name} onChange={e=>setForm(p=>({...p,name:e.target.value}))} placeholder="Netflix, Hydro-Québec…"
+              style={{width:"100%",background:C.card,border:`1px solid ${C.border2}`,borderRadius:12,padding:"11px 14px",fontSize:15,color:C.text}}/>
+          </div>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:12}}>
+            <div>
+              <p style={{fontSize:11,color:C.muted,marginBottom:5,fontWeight:600,textTransform:"uppercase",letterSpacing:".04em"}}>Montant ($)</p>
+              <input type="number" value={form.amount} onChange={e=>setForm(p=>({...p,amount:e.target.value}))} placeholder="0.00" min="0" step="0.01"
+                style={{width:"100%",background:C.card,border:`1px solid ${C.border2}`,borderRadius:12,padding:"11px 14px",fontSize:15,color:C.text}}/>
+            </div>
+            <div>
+              <p style={{fontSize:11,color:C.muted,marginBottom:5,fontWeight:600,textTransform:"uppercase",letterSpacing:".04em"}}>Fréquence</p>
+              <select value={form.frequency} onChange={e=>setForm(p=>({...p,frequency:e.target.value}))}
+                style={{width:"100%",background:C.card,border:`1px solid ${C.border2}`,borderRadius:12,padding:"11px 12px",fontSize:13,color:C.text,appearance:"none"}}>
+                {FREQS.map(f=><option key={f.id} value={f.id}>{f.label}</option>)}
+              </select>
+            </div>
+          </div>
+          <div style={{marginBottom:12}}>
+            <p style={{fontSize:11,color:C.muted,marginBottom:5,fontWeight:600,textTransform:"uppercase",letterSpacing:".04em"}}>Prochain paiement</p>
+            <input type="date" value={form.nextDate} onChange={e=>setForm(p=>({...p,nextDate:e.target.value}))}
+              style={{width:"100%",background:C.card,border:`1px solid ${C.border2}`,borderRadius:12,padding:"11px 14px",fontSize:15,color:C.text}}/>
+          </div>
+          <div style={{marginBottom:12}}>
+            <p style={{fontSize:11,color:C.muted,marginBottom:7,fontWeight:600,textTransform:"uppercase",letterSpacing:".04em"}}>Couleur</p>
+            <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+              {COLORS.map(col=><div key={col} className="tap" onClick={()=>setForm(p=>({...p,color:col}))}
+                style={{width:28,height:28,borderRadius:9,background:col,border:form.color===col?"3px solid white":"2px solid transparent"}}/>)}
+            </div>
+          </div>
+          <div style={{marginBottom:20}}>
+            <p style={{fontSize:11,color:C.muted,marginBottom:7,fontWeight:600,textTransform:"uppercase",letterSpacing:".04em"}}>Icône</p>
+            <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+              {Object.keys(ILIB).filter(k=>!["pencil","trash","check","plus","x"].includes(k)).map(k=>(
+                <div key={k} className="tap" onClick={()=>setForm(p=>({...p,icon:k}))}
+                  style={{width:36,height:36,borderRadius:10,background:form.icon===k?form.color:C.card2,display:"flex",alignItems:"center",justifyContent:"center",border:`2px solid ${form.icon===k?form.color:"transparent"}`}}>
+                  <IcoSVG name={k} size={16} color={form.icon===k?"white":C.muted}/>
+                </div>
+              ))}
+            </div>
+          </div>
+          <div className="tap" onClick={saveSub}
+            style={{background:C.accent,color:"white",textAlign:"center",padding:"15px",borderRadius:16,fontSize:16,fontWeight:700}}>
+            {editSub?"Enregistrer":"Ajouter"}
+          </div>
+        </div>
+      </div>}
+    </div>
+  );
+}
+
 // ── SIDE NAV (desktop) ────────────────────────────────────────────────
 function SideNav({tab,setTab}){
-  const items=[{id:"home",l:"Accueil",n:"home"},{id:"activity",l:"Activité",n:"act"},{id:"budget",l:"Budget",n:"bgt"},{id:"stats",l:"Stats",n:"sts"}];
+  const items=[{id:"home",l:"Accueil",n:"home"},{id:"activity",l:"Activité",n:"act"},{id:"subs",l:"Abonnements",n:"subs"},{id:"budget",l:"Budget",n:"bgt"},{id:"stats",l:"Stats",n:"sts"}];
   return(
     <div className="snav" style={{display:"none",flexDirection:"column",background:C.surf,borderRight:`1px solid ${C.border}`,padding:"28px 14px",gap:4,flexShrink:0}}>
       <div style={{display:"flex",alignItems:"center",gap:10,padding:"0 10px",marginBottom:32}}>
@@ -1806,13 +2029,14 @@ function NavIco({n,active}){
     act: <svg style={s} width="22" height="22" viewBox="0 0 22 22" fill="none"><rect x="3" y="5" width="16" height="2" rx="1" fill={c}/><rect x="3" y="10" width="12" height="2" rx="1" fill={c}/><rect x="3" y="15" width="8" height="2" rx="1" fill={c}/></svg>,
     bgt: <svg style={s} width="22" height="22" viewBox="0 0 22 22" fill="none"><circle cx="11" cy="11" r="8" stroke={c} strokeWidth="1.6" fill={active?"rgba(124,58,237,.15)":"none"}/><path d="M11 7v4l2.5 2.5" stroke={c} strokeWidth="1.6" strokeLinecap="round"/></svg>,
     sts: <svg style={s} width="22" height="22" viewBox="0 0 22 22" fill="none"><rect x="3" y="14" width="4" height="5" rx="1" fill={c}/><rect x="9" y="9" width="4" height="10" rx="1" fill={c} fillOpacity={active?1:.75}/><rect x="15" y="5" width="4" height="14" rx="1" fill={c} fillOpacity={active?1:.5}/></svg>,
+    subs:<svg style={s} width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M17 1l4 4-4 4" stroke={c} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/><path d="M3 11V9a4 4 0 014-4h14" stroke={c} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/><path d="M7 23l-4-4 4-4" stroke={c} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/><path d="M21 13v2a4 4 0 01-4 4H3" stroke={c} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/></svg>,
   };
   return icons[n]||null;
 }
 
 function BottomNav({tab,setTab}){
   const left=[{id:"home",l:"Accueil",n:"home"},{id:"activity",l:"Activité",n:"act"}];
-  const right=[{id:"budget",l:"Budget",n:"bgt"},{id:"stats",l:"Stats",n:"sts"}];
+  const right=[{id:"subs",l:"Abos",n:"subs"},{id:"budget",l:"Budget",n:"bgt"},{id:"stats",l:"Stats",n:"sts"}];
   return(
     <div className="bnav" style={{position:"fixed",bottom:0,left:0,right:0,background:C.surf,borderTop:`1px solid ${C.border2}`,display:"flex",alignItems:"center",padding:"max(8px, calc(8px + env(safe-area-inset-bottom)/2)) 4px max(14px, calc(14px + env(safe-area-inset-bottom)))",flexShrink:0,zIndex:1000}}>
       {left.map(t=>(
@@ -1843,20 +2067,22 @@ function App(){
   const [accounts,setAccounts]=useState([]);
   const [cats,setCats]=useState(DEFAULT_CATS);
   const [budgets,setBudgets]=useState({});
+  const [subs,setSubs]=useState([]);
   const [vnpHistory,setVnpHistory]=useState([]);
   const [ready,setReady]=useState(false);
 
   useEffect(()=>{
     (async()=>{
       try{
-        const[t,a,ca,b,v]=await Promise.allSettled([
-          STORE.get("fin:t7"),STORE.get("fin:a7"),STORE.get("fin:c7"),STORE.get("fin:b7"),STORE.get("fin:v7")
+        const[t,a,ca,b,v,s]=await Promise.allSettled([
+          STORE.get("fin:t7"),STORE.get("fin:a7"),STORE.get("fin:c7"),STORE.get("fin:b7"),STORE.get("fin:v7"),STORE.get("fin:s7")
         ]);
         if(t.status==="fulfilled"&&t.value)setTxns(JSON.parse(t.value));
         if(a.status==="fulfilled"&&a.value)setAccounts(JSON.parse(a.value));
         if(ca.status==="fulfilled"&&ca.value)setCats(JSON.parse(ca.value));
         if(b.status==="fulfilled"&&b.value)setBudgets(JSON.parse(b.value));
         if(v.status==="fulfilled"&&v.value)setVnpHistory(JSON.parse(v.value));
+        if(s.status==="fulfilled"&&s.value)setSubs(JSON.parse(s.value));
       }catch(e){}
       setReady(true);
     })();
@@ -1868,14 +2094,15 @@ function App(){
       if(document.hidden)return;
       setTimeout(async()=>{
         try{
-          const[t,a,ca,b,v]=await Promise.allSettled([
-            STORE.get("fin:t7"),STORE.get("fin:a7"),STORE.get("fin:c7"),STORE.get("fin:b7"),STORE.get("fin:v7")
+          const[t,a,ca,b,v,s]=await Promise.allSettled([
+            STORE.get("fin:t7"),STORE.get("fin:a7"),STORE.get("fin:c7"),STORE.get("fin:b7"),STORE.get("fin:v7"),STORE.get("fin:s7")
           ]);
           if(t.status==="fulfilled"&&t.value)setTxns(JSON.parse(t.value));
           if(a.status==="fulfilled"&&a.value)setAccounts(JSON.parse(a.value));
           if(ca.status==="fulfilled"&&ca.value)setCats(JSON.parse(ca.value));
           if(b.status==="fulfilled"&&b.value)setBudgets(JSON.parse(b.value));
           if(v.status==="fulfilled"&&v.value)setVnpHistory(JSON.parse(v.value));
+          if(s.status==="fulfilled"&&s.value)setSubs(JSON.parse(s.value));
         }catch(e){}
       },150);
     };
@@ -1886,6 +2113,7 @@ function App(){
   useEffect(()=>{if(ready)STORE.set("fin:t7",JSON.stringify(txns));}, [txns,ready]);
   useEffect(()=>{if(ready)STORE.set("fin:c7",JSON.stringify(cats));}, [cats,ready]);
   useEffect(()=>{if(ready)STORE.set("fin:b7",JSON.stringify(budgets));}, [budgets,ready]);
+  useEffect(()=>{if(ready)STORE.set("fin:s7",JSON.stringify(subs));}, [subs,ready]);
 
   useEffect(()=>{
     if(!ready)return;
@@ -1961,10 +2189,11 @@ function App(){
     <div style={{height:"100%",display:"flex",flexDirection:"row",background:C.bg}}>
       <SideNav tab={tab} setTab={setTab}/>
       <div style={{flex:1,display:"flex",flexDirection:"column",overflow:"hidden",minWidth:0}}>
-        {tab==="home"     &&<Home txns={txns} cats={cats} accounts={accounts} budgets={budgets} vnpHistory={vnpHistory} setTab={setTab}/>}
+        {tab==="home"     &&<Home txns={txns} cats={cats} accounts={accounts} budgets={budgets} subs={subs} setSubs={setSubs} addMany={addMany} vnpHistory={vnpHistory} setTab={setTab}/>}
         {tab==="activity" &&<Activity txns={txns} cats={cats} accounts={accounts} deleteTxn={deleteTxn} editTxn={editTxn}/>}
         {tab==="add"      &&<AddTxn addMany={addMany} accounts={accounts} cats={cats} onDone={()=>setTab("home")}/>}
         {tab==="budget"   &&<BudgetView txns={txns} cats={cats} budgets={budgets} setBudgets={setBudgets}/>}
+        {tab==="subs"     &&<SubsView subs={subs} setSubs={setSubs} addMany={addMany}/>}
         {tab==="stats"    &&<StatsView txns={txns} cats={cats} setCats={setCats} accounts={accounts} setAccounts={setAccounts} addMany={addMany} vnpHistory={vnpHistory} budgets={budgets}/>}
         <BottomNav tab={tab} setTab={setTab}/>
       </div>
