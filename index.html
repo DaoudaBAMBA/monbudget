@@ -732,8 +732,8 @@ function Home({txns,cats,accounts,setAccounts,budgets,subs=[],setSubs,addMany,vn
               <span className="tap" onClick={()=>setTab("stats")} style={{fontSize:12,color:C.accent}}>Gérer</span>
             </div>
           </div>
-          {accounts.slice(0,5).map((a,i)=>(
-            <div key={a.id} style={{display:"flex",alignItems:"center",gap:10,padding:"10px 14px",borderBottom:i<Math.min(4,accounts.length-1)||accounts.length>5?`1px solid ${C.border}`:"none"}}>
+          {(acctReorder?accounts:accounts.slice(0,5)).map((a,i)=>(
+            <div key={a.id} style={{display:"flex",alignItems:"center",gap:10,padding:"10px 14px",borderBottom:i<(acctReorder?accounts.length-1:Math.min(4,accounts.length-1))||(!acctReorder&&accounts.length>5)?`1px solid ${C.border}`:"none"}}>
               {acctReorder&&<div style={{display:"flex",flexDirection:"column",gap:2,flexShrink:0}}>
                 <div className="tap" onClick={()=>moveAcctUp(i)} style={{width:22,height:18,display:"flex",alignItems:"center",justifyContent:"center",borderRadius:5,background:i===0?"transparent":C.card2,opacity:i===0?.25:1}}>
                   <svg width="10" height="10" viewBox="0 0 10 10" fill="none"><path d="M2 7l3-4 3 4" stroke={C.sec} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
@@ -750,7 +750,8 @@ function Home({txns,cats,accounts,setAccounts,budgets,subs=[],setSubs,addMany,vn
               <p style={{fontSize:13,fontWeight:700,margin:0,color:atypeById(a.accountType)?.isDebt?C.red:C.text}}>{atypeById(a.accountType)?.isDebt?"-":""}{fmt(a.balance)}</p>
             </div>
           ))}
-          {accounts.length>5&&<p style={{textAlign:"center",fontSize:11,color:C.muted,padding:"9px 10px"}}>{acctReorder?<span style={{color:C.accent}}>Réordonne les 5 premiers pour changer la priorité</span>:`+${accounts.length-5} autre${accounts.length-5>1?"s":""}`}</p>}
+          {!acctReorder&&accounts.length>5&&<p style={{textAlign:"center",fontSize:11,color:C.muted,padding:"9px 10px"}}>+{accounts.length-5} autre{accounts.length-5>1?"s":""}</p>}
+          {acctReorder&&<p style={{textAlign:"center",fontSize:11,color:C.accent,padding:"9px 10px"}}>Les 5 premiers sont affichés sur l'accueil</p>}
         </Card>}
 
         {/* ── ABONNEMENTS À VENIR (2e position) ── */}
@@ -1953,7 +1954,7 @@ function SubsView({subs,setSubs,addMany}){
       {showForm&&<div className="overlay" onClick={()=>{setShowForm(false);setEditSub(null);setForm(BLANK);}}
         style={{position:"fixed",inset:0,background:"rgba(0,0,0,.6)",zIndex:900,display:"flex",alignItems:"flex-end"}}>
         <div className="sheet" onClick={e=>e.stopPropagation()}
-          style={{width:"100%",background:C.surf,borderTopLeftRadius:28,borderTopRightRadius:28,padding:"20px 20px 36px",maxHeight:"88vh",overflowY:"auto"}}>
+          style={{width:"100%",background:C.surf,borderTopLeftRadius:28,borderTopRightRadius:28,padding:"20px 20px 0",maxHeight:"92vh",overflowY:"scroll",display:"flex",flexDirection:"column"}}>
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:18}}>
             <p style={{fontSize:17,fontWeight:800,color:C.text,margin:0}}>{editSub?"Modifier l'abonnement":"Nouvel abonnement"}</p>
             <div className="tap" onClick={()=>{setShowForm(false);setEditSub(null);setForm(BLANK);}}><IcoSVG name="x" size={20} color={C.muted}/></div>
@@ -2004,6 +2005,7 @@ function SubsView({subs,setSubs,addMany}){
             style={{background:C.accent,color:"white",textAlign:"center",padding:"15px",borderRadius:16,fontSize:16,fontWeight:700}}>
             {editSub?"Enregistrer":"Ajouter"}
           </div>
+          <div style={{height:"max(24px, calc(24px + env(safe-area-inset-bottom)))"}}/>
         </div>
       </div>}
     </div>
