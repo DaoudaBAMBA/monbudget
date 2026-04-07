@@ -478,35 +478,42 @@ function CatChips({cats,value,onChange,type}){
 
 function TxnRow({txn,cats,accounts,last,onTap}){
   const cat=cats.find(c=>c.id===txn.category)||cats[3];
-  const isInc=txn.type==="income";const isSav=txn.type==="epargne";
+  const isInc=txn.type==="income";const isSav=txn.type==="epargne";const isVir=txn.type==="virement";
   const fromAcct=accounts.find(a=>a.id===txn.accountId);
   const toAcct=accounts.find(a=>a.id===txn.accountToId);
   return(
     <div className="tap" onClick={()=>onTap&&onTap(txn)} style={{display:"flex",alignItems:"center",gap:11,padding:"11px 14px",borderBottom:last?"none":`1px solid ${C.border}`,active:{background:C.card2}}}>
-      <CatIconBadge cat={cat} size={40}/>
+      {isVir
+        ?<div style={{width:40,height:40,borderRadius:13,background:C.teal+"22",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+           <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M7 16H17M17 16l-3-3M17 16l-3 3M17 8H7M7 8l3-3M7 8l3 3" stroke={C.teal} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/></svg>
+         </div>
+        :<CatIconBadge cat={cat} size={40}/>}
       <div style={{flex:1,minWidth:0}}>
-        <p style={{fontSize:14,margin:0,color:C.text,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",fontWeight:500}}>{txn.description||cat.label}</p>
+        <p style={{fontSize:14,margin:0,color:C.text,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",fontWeight:500}}>{txn.description||(isVir?"Virement":cat.label)}</p>
         <div style={{display:"flex",gap:5,marginTop:3,alignItems:"center",flexWrap:"wrap"}}>
-          <span style={{fontSize:10,padding:"1px 7px",borderRadius:10,background:cat.color+"20",color:cat.color,fontWeight:600}}>{cat.label}</span>
-          {fromAcct&&<span style={{fontSize:10,color:C.muted}}>{isSav?"de ":""}{fromAcct.name.slice(0,10)}{toAcct?" → "+toAcct.name.slice(0,10):""}</span>}
+          {isVir
+            ?<span style={{fontSize:10,padding:"1px 7px",borderRadius:10,background:C.teal+"20",color:C.teal,fontWeight:600}}>Virement</span>
+            :<span style={{fontSize:10,padding:"1px 7px",borderRadius:10,background:cat.color+"20",color:cat.color,fontWeight:600}}>{cat.label}</span>}
+          {fromAcct&&<span style={{fontSize:10,color:C.muted}}>{(isSav||isVir)?"de ":""}{fromAcct.name.slice(0,10)}{toAcct?" → "+toAcct.name.slice(0,10):""}</span>}
           <span style={{fontSize:10,color:C.muted,opacity:.7}}>{txn.date}</span>
         </div>
       </div>
-      <p style={{fontSize:14,fontWeight:700,margin:0,flexShrink:0,color:isInc?C.green:isSav?C.accent:C.text}}>{isInc?"+":"-"}{fmt(txn.amount)}</p>
+      <p style={{fontSize:14,fontWeight:700,margin:0,flexShrink:0,color:isInc?C.green:isSav?C.accent:isVir?C.teal:C.text}}>{isInc?"+":(isSav||isVir)?"⇄":"-"}{fmt(txn.amount)}</p>
     </div>
   );
 }
 
 // ── TXN DETAIL SHEET ──────────────────────────────────────────────────
 function TxnSheet({txn,cats,accounts,onClose,onDelete,onEdit}){
-  const isInc=txn.type==="income";const isSav=txn.type==="epargne";
-  const tCol=isInc?C.green:isSav?C.accent:C.red;
+  const isInc=txn.type==="income";const isSav=txn.type==="epargne";const isVir=txn.type==="virement";
+  const tCol=isInc?C.green:isSav?C.accent:isVir?C.teal:C.red;
   const [mode,setMode]=useState("view"); // "view" | "edit" | "confirm"
   const [desc,setDesc]=useState(txn.description||"");
   const [amount,setAmount]=useState(String(txn.amount||""));
   const [cat,setCat]=useState(txn.category||"alim");
   const [date,setDate]=useState(txn.date||todayStr());
   const [accountId,setAccountId]=useState(txn.accountId||"");
+  const [accountToId,setAccountToId]=useState(txn.accountToId||"");
   const validCats=cats.filter(c=>c.forTypes?.includes(txn.type));
   const sheetParentCats=validCats.filter(c=>!c.parentId);
   const initCatObj=cats.find(c=>c.id===txn.category);
@@ -519,7 +526,7 @@ function TxnSheet({txn,cats,accounts,onClose,onDelete,onEdit}){
   const toAcct=accounts.find(a=>a.id===txn.accountToId);
   function save(){
     const n=parseFloat(amount.replace(",","."));if(!n||isNaN(n))return;
-    onEdit({...txn,description:desc,amount:n,category:cat,date,accountId:accountId||txn.accountId});
+    onEdit({...txn,description:desc,amount:n,category:isVir?null:cat,date,accountId:accountId||txn.accountId,accountToId:accountToId||txn.accountToId||null});
     onClose();
   }
   return(
@@ -535,12 +542,13 @@ function TxnSheet({txn,cats,accounts,onClose,onDelete,onEdit}){
               <p style={{fontSize:17,fontWeight:700,margin:"0 0 3px",color:C.text}}>{txn.description||currentCat.label}</p>
               <p style={{fontSize:13,color:C.muted,margin:0}}>{currentCat.label} · {txn.date}</p>
             </div>
-            <p style={{fontSize:22,fontWeight:800,color:isInc?C.green:isSav?C.accent:C.text,flexShrink:0}}>{isInc?"+":"-"}{fmt(txn.amount)}</p>
+            <p style={{fontSize:22,fontWeight:800,color:isInc?C.green:isSav?C.accent:isVir?C.teal:C.text,flexShrink:0}}>{isInc?"+":(isSav||isVir)?"⇄":"-"}{fmt(txn.amount)}</p>
           </div>
+          {isVir&&<span style={{display:"inline-block",fontSize:11,padding:"2px 10px",borderRadius:10,background:C.teal+"20",color:C.teal,fontWeight:600,marginBottom:12}}>Virement entre comptes</span>}
           {(fromAcct||toAcct)&&(
             <div style={{background:C.card2,borderRadius:14,padding:"12px 14px",marginBottom:14}}>
-              {fromAcct&&<p style={{fontSize:12,color:C.sec,margin:"0 0 2px"}}>{isSav?"De : ":"Compte : "}<span style={{color:C.text,fontWeight:600}}>{fromAcct.name}</span></p>}
-              {isSav&&toAcct&&<p style={{fontSize:12,color:C.sec,margin:0}}>Vers : <span style={{color:C.text,fontWeight:600}}>{toAcct.name}</span></p>}
+              {fromAcct&&<p style={{fontSize:12,color:C.sec,margin:"0 0 2px"}}>{(isSav||isVir)?"De : ":"Compte : "}<span style={{color:C.text,fontWeight:600}}>{fromAcct.name}</span></p>}
+              {(isSav||isVir)&&toAcct&&<p style={{fontSize:12,color:C.sec,margin:0}}>Vers : <span style={{color:C.text,fontWeight:600}}>{toAcct.name}</span></p>}
             </div>
           )}
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginTop:4}}>
@@ -573,8 +581,8 @@ function TxnSheet({txn,cats,accounts,onClose,onDelete,onEdit}){
             <input type="date" value={date} onChange={e=>setDate(e.target.value)}
               style={{width:"100%",fontSize:15,border:"none",background:"transparent",color:C.text,padding:0}}/>
           </div>
-          {/* Catégorie — deux niveaux */}
-          <div style={{background:C.card2,borderRadius:14,padding:"12px 14px",marginBottom:10}}>
+          {/* Catégorie — deux niveaux (caché pour virement) */}
+          {!isVir&&<div style={{background:C.card2,borderRadius:14,padding:"12px 14px",marginBottom:10}}>
             <p style={{fontSize:10,color:C.muted,margin:"0 0 8px",textTransform:"uppercase",letterSpacing:".07em"}}>Catégorie</p>
             <div style={{display:"flex",flexWrap:"wrap",gap:6,marginBottom:sheetSubCats.length>0?9:0}}>
               {sheetParentCats.map(c=>{
@@ -601,9 +609,31 @@ function TxnSheet({txn,cats,accounts,onClose,onDelete,onEdit}){
                 </div>
               </div>
             )}
-          </div>
-          {/* Compte */}
-          {accounts.length>0&&!isSav&&(
+          </div>}
+          {/* Compte(s) */}
+          {accounts.length>0&&(isVir?(
+            <div style={{background:C.card2,borderRadius:14,padding:"12px 14px",marginBottom:10}}>
+              <p style={{fontSize:10,color:C.muted,margin:"0 0 8px",textTransform:"uppercase",letterSpacing:".07em"}}>Comptes du virement</p>
+              <p style={{fontSize:10,color:C.muted,margin:"0 0 5px"}}>De</p>
+              <div style={{display:"flex",flexWrap:"wrap",gap:6,marginBottom:8}}>
+                {accounts.map(a=>{const b=bankById(a.bank);return(
+                  <div key={a.id} className="chip tap" onClick={()=>setAccountId(a.id)}
+                    style={{background:accountId===a.id?b.col+"25":C.card,color:accountId===a.id?b.col:C.muted,borderColor:accountId===a.id?b.col:"transparent"}}>
+                    {a.name.slice(0,14)}
+                  </div>
+                );})}
+              </div>
+              <p style={{fontSize:10,color:C.muted,margin:"0 0 5px"}}>Vers</p>
+              <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
+                {accounts.filter(a=>a.id!==accountId).map(a=>{const b=bankById(a.bank);return(
+                  <div key={a.id} className="chip tap" onClick={()=>setAccountToId(a.id)}
+                    style={{background:accountToId===a.id?b.col+"25":C.card,color:accountToId===a.id?b.col:C.muted,borderColor:accountToId===a.id?b.col:"transparent"}}>
+                    {a.name.slice(0,14)}
+                  </div>
+                );})}
+              </div>
+            </div>
+          ):!isSav&&(
             <div style={{background:C.card2,borderRadius:14,padding:"12px 14px",marginBottom:10}}>
               <p style={{fontSize:10,color:C.muted,margin:"0 0 8px",textTransform:"uppercase",letterSpacing:".07em"}}>Compte</p>
               <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
@@ -615,10 +645,10 @@ function TxnSheet({txn,cats,accounts,onClose,onDelete,onEdit}){
                 );})}
               </div>
             </div>
-          )}
+          ))}
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginTop:4}}>
             <div className="tap" onClick={()=>setMode("view")} style={{textAlign:"center",padding:"13px",borderRadius:14,background:C.card2,fontSize:14,fontWeight:600,color:C.sec}}>Annuler</div>
-            <div className="tap" onClick={save} style={{textAlign:"center",padding:"13px",borderRadius:14,background:C.accent,fontSize:14,fontWeight:700,color:"#fff"}}>Sauvegarder</div>
+            <div className="tap" onClick={save} style={{textAlign:"center",padding:"13px",borderRadius:14,background:tCol,fontSize:14,fontWeight:700,color:"#fff"}}>Sauvegarder</div>
           </div>
         </>}
 
@@ -843,7 +873,7 @@ function Activity({txns,cats,accounts,deleteTxn,editTxn}){
       <div style={{background:C.surf,padding:"14px",borderBottom:`1px solid ${C.border}`,flexShrink:0}}>
         <MonthNav year={year} month={month} onChange={(y,m)=>{setYear(y);setMonth(m);}}/>
         <div style={{marginTop:10,display:"flex",gap:5,justifyContent:"center"}}>
-          {[{id:"all",label:"Tout"},{id:"expense",label:"Dépenses"},{id:"income",label:"Revenus"},{id:"epargne",label:"Épargne"}].map(f=>(
+          {[{id:"all",label:"Tout"},{id:"expense",label:"Dépenses"},{id:"income",label:"Revenus"},{id:"epargne",label:"Épargne"},{id:"virement",label:"Virements"}].map(f=>(
             <div key={f.id} className="pill tap" onClick={()=>setType(f.id)} style={{background:type===f.id?C.accentL:"transparent",color:type===f.id?C.accent:C.muted,borderColor:type===f.id?C.accent:C.border2,fontSize:11,padding:"5px 12px"}}>
               {f.label}{type===f.id&&f.id!=="all"&&<span style={{marginLeft:4,fontSize:10,fontWeight:700}}>{f.id==="income"?"+"+fmt(income):"-"+fmt(expense)}</span>}
             </div>
@@ -925,22 +955,22 @@ function AddTxn({addMany,accounts,cats,onDone}){
 
   function save(){
     const n=parseFloat(amount.replace(",","."));if(!n||isNaN(n))return;
-    const txn={id:uid(),type,amount:n,description:desc,category:cat,date,accountId:fromId||null,accountToId:type==="epargne"?(toId||null):null};
+    const txn={id:uid(),type,amount:n,description:desc||(type==="virement"?"Virement":""),category:type==="virement"?null:cat,date,accountId:fromId||null,accountToId:(type==="epargne"||type==="virement")?(toId||null):null};
     addMany([txn]);onDone();
   }
 
   const validCats=cats.filter(c=>c.forTypes?.includes(type));
   const parentCats=validCats.filter(c=>!c.parentId);
   const subCats=selParent?cats.filter(c=>c.parentId===selParent&&c.forTypes?.includes(type)):[];
-  const tCols={expense:C.red,income:C.green,epargne:C.accent};const tCol=tCols[type];
+  const tCols={expense:C.red,income:C.green,epargne:C.accent,virement:C.teal};const tCol=tCols[type]||C.accent;
   const assetAccts=accounts.filter(a=>!atypeById(a.accountType)?.isDebt);
 
   return(
     <div className="scroll">
       <div style={{background:C.surf,padding:"16px",borderBottom:`1px solid ${C.border}`}}>
         <p style={{fontSize:18,fontWeight:700,color:C.text,margin:"0 0 14px"}}>Nouvelle transaction</p>
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8}}>
-          {[{v:"expense",l:"Dépense",c:C.red,ico:"trending"},{v:"income",l:"Revenu",c:C.green,ico:"dollar"},{v:"epargne",l:"Épargne",c:C.accent,ico:"piggy"}].map(t=>(
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+          {[{v:"expense",l:"Dépense",c:C.red,ico:"trending"},{v:"income",l:"Revenu",c:C.green,ico:"dollar"},{v:"epargne",l:"Épargne",c:C.accent,ico:"piggy"},{v:"virement",l:"Virement",c:C.teal,ico:"repeat"}].map(t=>(
             <div key={t.v} className="tap" onClick={()=>setType(t.v)} style={{display:"flex",flexDirection:"column",alignItems:"center",gap:5,padding:"10px 4px",borderRadius:14,fontSize:12,fontWeight:700,background:type===t.v?t.c+"25":"transparent",color:type===t.v?t.c:C.muted,border:`1.5px solid ${type===t.v?t.c:C.border2}`}}>
               <IcoSVG name={t.ico} size={16} color={type===t.v?t.c:"rgba(255,255,255,.3)"}/>
               {t.l}
@@ -956,11 +986,11 @@ function AddTxn({addMany,accounts,cats,onDone}){
         </Card>
         <Card style={{padding:"13px 16px"}}>
           <p style={{fontSize:10,color:C.muted,margin:"0 0 7px",textTransform:"uppercase",letterSpacing:".07em"}}>Description</p>
-          <input value={desc} onChange={e=>setDesc(e.target.value)} placeholder={type==="income"?"Ex: Salaire iA, livraison...":type==="epargne"?"Ex: Transfert CELI...":"Ex: Épicerie Metro, loyer..."}
+          <input value={desc} onChange={e=>setDesc(e.target.value)} placeholder={type==="income"?"Ex: Salaire iA, livraison...":type==="epargne"?"Ex: Transfert CELI...":type==="virement"?"Ex: Paiement carte, remboursement...":"Ex: Épicerie Metro, loyer..."}
             style={{width:"100%",fontSize:15,border:"none",background:"transparent",padding:0,color:C.text}}/>
         </Card>
-        {/* Two-level Category Picker */}
-        <Card style={{padding:"13px 16px"}}>
+        {/* Two-level Category Picker — caché pour virement */}
+        {type!=="virement"&&<Card style={{padding:"13px 16px"}}>
           <p style={{fontSize:10,color:C.muted,margin:"0 0 10px",textTransform:"uppercase",letterSpacing:".07em"}}>Catégorie</p>
           <div style={{display:"flex",flexWrap:"wrap",gap:6,marginBottom:subCats.length>0?10:0}}>
             {parentCats.map(c=>{
@@ -987,7 +1017,7 @@ function AddTxn({addMany,accounts,cats,onDone}){
               </div>
             </div>
           )}
-        </Card>
+        </Card>}
         {/* Date */}
         <Card style={{padding:"13px 16px"}}>
           <p style={{fontSize:10,color:C.muted,margin:"0 0 7px",textTransform:"uppercase",letterSpacing:".07em"}}>Date</p>
@@ -995,14 +1025,14 @@ function AddTxn({addMany,accounts,cats,onDone}){
         </Card>
         {/* Account(s) */}
         {accounts.length>0&&(
-          type==="epargne"?(
+          (type==="epargne"||type==="virement")?(
             <Card style={{padding:"13px 16px"}}>
-              <p style={{fontSize:10,color:C.muted,margin:"0 0 10px",textTransform:"uppercase",letterSpacing:".07em"}}>Transfert entre comptes</p>
+              <p style={{fontSize:10,color:C.muted,margin:"0 0 10px",textTransform:"uppercase",letterSpacing:".07em"}}>{type==="virement"?"Comptes du virement":"Transfert entre comptes"}</p>
               <div style={{display:"flex",flexDirection:"column",gap:8}}>
                 <div>
                   <p style={{fontSize:10,color:C.muted,margin:"0 0 6px"}}>De</p>
                   <div style={{display:"flex",gap:5,flexWrap:"wrap"}}>
-                    {assetAccts.map(a=>{const b=bankById(a.bank);return(
+                    {(type==="virement"?accounts:assetAccts).map(a=>{const b=bankById(a.bank);return(
                       <div key={a.id} className="chip tap" onClick={()=>setFromId(a.id)}
                         style={{background:fromId===a.id?b.col+"25":C.card2,color:fromId===a.id?b.col:C.muted,borderColor:fromId===a.id?b.col:"transparent"}}>
                         {a.name.slice(0,14)}
@@ -1779,6 +1809,10 @@ Inclure TOUTES les transactions.`}]}]})});
   const updateCat=(id,c)=>setParsed(p=>p.map(t=>t.id===id?{...t,category:c}:t));
   const updateDesc=(id,v)=>setParsed(p=>p.map(t=>t.id===id?{...t,description:v}:t));
   const updateAmount=(id,v)=>setParsed(p=>p.map(t=>t.id===id?{...t,amount:Math.abs(parseFloat(v)||0)}:t));
+  const updateDate=(id,v)=>setParsed(p=>p.map(t=>t.id===id?{...t,date:v}:t));
+  const updateType=(id,v)=>setParsed(p=>p.map(t=>t.id===id?{...t,type:v,category:null}:t));
+  const updateAcct=(id,v)=>setParsed(p=>p.map(t=>t.id===id?{...t,accountId:v}:t));
+  const updateAcctTo=(id,v)=>setParsed(p=>p.map(t=>t.id===id?{...t,accountToId:v}:t));
   const sel=parsed.filter(t=>t.selected);
   if(showKeyInput)return(
     <div className="scroll" style={{padding:"14px"}}>
@@ -1820,30 +1854,84 @@ Inclure TOUTES les transactions.`}]}]})});
             <p style={{fontSize:13,color:C.muted,margin:0}}>{parsed.length} détectée(s) · {sel.length} sélectionnée(s)</p>
             <span className="tap" onClick={()=>{setStage("upload");setPreview(null);}} style={{fontSize:12,color:C.accent}}>Recommencer</span>
           </div>
-          {parsed.map(t=>{const cat=cats.find(c=>c.id===t.category)||cats[3];return(
+          {parsed.map(t=>{
+            const catObj=cats.find(c=>c.id===t.category);
+            const parentId=catObj?.parentId||catObj?.id||"";
+            const subCatsScan=parentId?cats.filter(c=>c.parentId===parentId&&c.forTypes?.includes(t.type)):[];
+            const tColScan=t.type==="income"?C.green:t.type==="epargne"?C.accent:C.red;
+            return(
             <Card key={t.id} style={{padding:"13px 16px",opacity:t.selected?1:.5,border:t.isDuplicate?`1px solid ${C.orange}44`:`1px solid ${C.border}`}}>
               {t.isDuplicate&&<p style={{fontSize:11,color:C.orange,margin:"0 0 8px",fontWeight:600}}>⚠️ Possible doublon — décoché par défaut</p>}
-              <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:10}}>
+              {/* Ligne 1 : checkbox, description, montant */}
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
                 <div style={{display:"flex",alignItems:"center",gap:10,flex:1,minWidth:0}}>
                   <div className="tap" onClick={()=>toggle(t.id)} style={{width:24,height:24,borderRadius:7,flexShrink:0,background:t.selected?C.accent:"transparent",border:`2px solid ${t.selected?C.accent:C.border2}`,display:"flex",alignItems:"center",justifyContent:"center"}}>
                     {t.selected&&<svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M2 6l3 3 5-5" stroke="white" strokeWidth="2" strokeLinecap="round"/></svg>}
                   </div>
-                  <div style={{flex:1,minWidth:0}}>
-                    <input value={t.description} onChange={e=>updateDesc(t.id,e.target.value)}
-                      style={{width:"100%",fontSize:14,fontWeight:600,border:"none",background:"transparent",padding:0,color:C.text}}/>
-                    <p style={{fontSize:11,margin:"2px 0 0",color:C.muted}}>{t.date}</p>
-                  </div>
+                  <input value={t.description} onChange={e=>updateDesc(t.id,e.target.value)}
+                    style={{flex:1,fontSize:14,fontWeight:600,border:"none",background:"transparent",padding:0,color:C.text}}/>
                 </div>
                 <input type="number" value={t.amount} onChange={e=>updateAmount(t.id,e.target.value)}
-                  style={{width:80,fontSize:14,fontWeight:700,border:"none",background:"transparent",padding:0,color:t.type==="income"?C.green:C.text,textAlign:"right"}}/>
+                  style={{width:78,fontSize:14,fontWeight:700,border:"none",background:"transparent",padding:0,color:tColScan,textAlign:"right"}}/>
               </div>
-              <div style={{display:"flex",flexWrap:"wrap",gap:5}}>
-                {cats.filter(c=>c.forTypes?.includes(t.type)&&!c.parentId).map(c=>(
-                  <div key={c.id} className="chip tap" onClick={()=>updateCat(t.id,c.id)} style={{display:"inline-flex",alignItems:"center",gap:4,background:t.category===c.id?c.color+"28":"rgba(255,255,255,.05)",color:t.category===c.id?c.color:C.muted,borderColor:t.category===c.id?c.color:C.border,fontWeight:t.category===c.id?700:400,fontSize:11}}>
-                    {c.icon&&ILIB[c.icon]&&<IcoSVG name={c.icon} size={11} color={t.category===c.id?c.color:C.muted}/>}{c.label}
+              {/* Ligne 2 : type + date + compte */}
+              <div style={{display:"flex",gap:5,flexWrap:"wrap",marginBottom:8,alignItems:"center"}}>
+                {[{v:"expense",l:"Dép.",c:C.red},{v:"income",l:"Rev.",c:C.green},{v:"epargne",l:"Éparg.",c:C.accent}].map(tp=>(
+                  <div key={tp.v} className="chip tap" onClick={()=>updateType(t.id,tp.v)}
+                    style={{background:t.type===tp.v?tp.c+"28":C.card2,color:t.type===tp.v?tp.c:C.muted,borderColor:t.type===tp.v?tp.c:"transparent",fontSize:10,padding:"2px 8px"}}>
+                    {tp.l}
                   </div>
                 ))}
+                <div style={{flex:1}}/>
+                <input type="date" value={t.date} onChange={e=>updateDate(t.id,e.target.value)}
+                  style={{fontSize:10,border:`1px solid ${C.border2}`,background:C.card2,borderRadius:7,padding:"2px 6px",color:C.sec}}/>
               </div>
+              {/* Ligne 3 : compte source */}
+              {accounts.length>0&&(
+                <div style={{display:"flex",gap:4,flexWrap:"wrap",marginBottom:8}}>
+                  <span style={{fontSize:10,color:C.muted,alignSelf:"center"}}>Compte :</span>
+                  {accounts.map(a=>{const b=bankById(a.bank);return(
+                    <div key={a.id} className="chip tap" onClick={()=>updateAcct(t.id,a.id)}
+                      style={{background:t.accountId===a.id?b.col+"25":C.card2,color:t.accountId===a.id?b.col:C.muted,borderColor:t.accountId===a.id?b.col:"transparent",fontSize:10,padding:"2px 8px"}}>
+                      {a.name.slice(0,12)}
+                    </div>
+                  );})}
+                </div>
+              )}
+              {/* Ligne 4 : catégorie (parent) */}
+              <div style={{display:"flex",flexWrap:"wrap",gap:5,marginBottom:subCatsScan.length>0?6:0}}>
+                {cats.filter(c=>c.forTypes?.includes(t.type)&&!c.parentId).map(c=>{
+                  const isSel=parentId===c.id||t.category===c.id;
+                  return(
+                  <div key={c.id} className="chip tap" onClick={()=>updateCat(t.id,c.id)}
+                    style={{display:"inline-flex",alignItems:"center",gap:4,background:isSel?c.color+"28":"rgba(255,255,255,.05)",color:isSel?c.color:C.muted,borderColor:isSel?c.color:C.border,fontWeight:isSel?700:400,fontSize:11}}>
+                    {c.icon&&ILIB[c.icon]&&<IcoSVG name={c.icon} size={11} color={isSel?c.color:C.muted}/>}{c.label}
+                  </div>
+                );})}
+              </div>
+              {/* Ligne 5 : sous-catégorie si applicable */}
+              {subCatsScan.length>0&&(
+                <div style={{display:"flex",flexWrap:"wrap",gap:4,marginBottom:6,paddingLeft:8,borderLeft:`2px solid ${C.border2}`}}>
+                  {subCatsScan.map(c=>(
+                    <div key={c.id} className="chip tap" onClick={()=>updateCat(t.id,c.id)}
+                      style={{background:t.category===c.id?c.color+"28":"rgba(255,255,255,.05)",color:t.category===c.id?c.color:C.muted,borderColor:t.category===c.id?c.color:C.border,fontWeight:t.category===c.id?700:400,fontSize:10}}>
+                      {c.label}
+                    </div>
+                  ))}
+                </div>
+              )}
+              {/* Ligne 6 : compte destination pour épargne */}
+              {t.type==="epargne"&&accounts.length>1&&(
+                <div style={{display:"flex",gap:4,flexWrap:"wrap",marginTop:4}}>
+                  <span style={{fontSize:10,color:C.muted,alignSelf:"center"}}>Vers →</span>
+                  {accounts.filter(a=>a.id!==t.accountId).map(a=>{const b=bankById(a.bank);return(
+                    <div key={a.id} className="chip tap" onClick={()=>updateAcctTo(t.id,a.id)}
+                      style={{background:t.accountToId===a.id?b.col+"25":C.card2,color:t.accountToId===a.id?b.col:C.muted,borderColor:t.accountToId===a.id?b.col:"transparent",fontSize:10,padding:"2px 8px"}}>
+                      {a.name.slice(0,12)}
+                    </div>
+                  );})}
+                </div>
+              )}
             </Card>
           );})}
           <div className="tap" onClick={()=>{addMany(sel);setStage("upload");}} style={{background:C.accent,color:"#fff",textAlign:"center",padding:"15px",borderRadius:16,fontSize:16,fontWeight:700,opacity:sel.length===0?.4:1}}>
@@ -2156,10 +2244,10 @@ function App(){
     setAccounts(prev=>{
       let updated=[...prev];
       newTxns.forEach(t=>{
-        if(t.type==="expense"&&t.accountId){updated=updated.map(a=>a.id===t.accountId?{...a,balance:Math.max(0,(+a.balance||0)-t.amount)}:a);}
+        if(t.type==="expense"&&t.accountId){updated=updated.map(a=>a.id===t.accountId?{...a,balance:(+a.balance||0)-t.amount}:a);}
         else if(t.type==="income"&&t.accountId){updated=updated.map(a=>a.id===t.accountId?{...a,balance:(+a.balance||0)+t.amount}:a);}
-        else if(t.type==="epargne"){
-          if(t.accountId)updated=updated.map(a=>a.id===t.accountId?{...a,balance:Math.max(0,(+a.balance||0)-t.amount)}:a);
+        else if(t.type==="epargne"||t.type==="virement"){
+          if(t.accountId)updated=updated.map(a=>a.id===t.accountId?{...a,balance:(+a.balance||0)-t.amount}:a);
           if(t.accountToId)updated=updated.map(a=>a.id===t.accountToId?{...a,balance:(+a.balance||0)+t.amount}:a);
         }
       });
@@ -2175,29 +2263,34 @@ function App(){
     setAccounts(prev=>{
       let updated=[...prev];
       if(txn.type==="expense"&&txn.accountId){updated=updated.map(a=>a.id===txn.accountId?{...a,balance:(+a.balance||0)+txn.amount}:a);}
-      else if(txn.type==="income"&&txn.accountId){updated=updated.map(a=>a.id===txn.accountId?{...a,balance:Math.max(0,(+a.balance||0)-txn.amount)}:a);}
-      else if(txn.type==="epargne"){
+      else if(txn.type==="income"&&txn.accountId){updated=updated.map(a=>a.id===txn.accountId?{...a,balance:(+a.balance||0)-txn.amount}:a);}
+      else if(txn.type==="epargne"||txn.type==="virement"){
         if(txn.accountId)updated=updated.map(a=>a.id===txn.accountId?{...a,balance:(+a.balance||0)+txn.amount}:a);
-        if(txn.accountToId)updated=updated.map(a=>a.id===txn.accountToId?{...a,balance:Math.max(0,(+a.balance||0)-txn.amount)}:a);
+        if(txn.accountToId)updated=updated.map(a=>a.id===txn.accountToId?{...a,balance:(+a.balance||0)-txn.amount}:a);
       }
       return updated;
     });
     setTxns(p=>p.filter(t=>t.id!==id));
   },[txns]);
 
-  // editTxn: update description/amount/category/date, adjust balances for amount change
+  // editTxn: update transaction, fully reverse old effect then apply new
   const editTxn=useCallback(updated=>{
     const old=txns.find(t=>t.id===updated.id);if(!old)return;
     setAccounts(prev=>{
       let u=[...prev];
-      const diff=updated.amount-old.amount;
-      if(diff!==0){
-        if(old.type==="expense"&&old.accountId)u=u.map(a=>a.id===old.accountId?{...a,balance:Math.max(0,(+a.balance||0)-diff)}:a);
-        else if(old.type==="income"&&old.accountId)u=u.map(a=>a.id===old.accountId?{...a,balance:(+a.balance||0)+diff}:a);
-        else if(old.type==="epargne"){
-          if(old.accountId)u=u.map(a=>a.id===old.accountId?{...a,balance:Math.max(0,(+a.balance||0)-diff)}:a);
-          if(old.accountToId)u=u.map(a=>a.id===old.accountToId?{...a,balance:(+a.balance||0)+diff}:a);
-        }
+      // 1. Reverse old transaction
+      if(old.type==="expense"&&old.accountId)u=u.map(a=>a.id===old.accountId?{...a,balance:(+a.balance||0)+old.amount}:a);
+      else if(old.type==="income"&&old.accountId)u=u.map(a=>a.id===old.accountId?{...a,balance:(+a.balance||0)-old.amount}:a);
+      else if(old.type==="epargne"||old.type==="virement"){
+        if(old.accountId)u=u.map(a=>a.id===old.accountId?{...a,balance:(+a.balance||0)+old.amount}:a);
+        if(old.accountToId)u=u.map(a=>a.id===old.accountToId?{...a,balance:(+a.balance||0)-old.amount}:a);
+      }
+      // 2. Apply new transaction
+      if(updated.type==="expense"&&updated.accountId)u=u.map(a=>a.id===updated.accountId?{...a,balance:(+a.balance||0)-updated.amount}:a);
+      else if(updated.type==="income"&&updated.accountId)u=u.map(a=>a.id===updated.accountId?{...a,balance:(+a.balance||0)+updated.amount}:a);
+      else if(updated.type==="epargne"||updated.type==="virement"){
+        if(updated.accountId)u=u.map(a=>a.id===updated.accountId?{...a,balance:(+a.balance||0)-updated.amount}:a);
+        if(updated.accountToId)u=u.map(a=>a.id===updated.accountToId?{...a,balance:(+a.balance||0)+updated.amount}:a);
       }
       return u;
     });
